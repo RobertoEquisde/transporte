@@ -1,0 +1,36 @@
+{
+  "name": "@robertoruvalcaba/transporte-api",
+  "version": "1.0.0",
+  "description": "OpenAPI client for @robertoruvalcaba/transporte-api",
+  "author": "Roberto Ruvalcaba",
+  "repository": {
+    "type": "git",
+    "url": "https://gitlab.com/projects-dev4/adavec/prefactura-adavec-back.git"
+  },
+  "publishConfig": {
+    "registry": "https://gitlab.com/api/v4/projects/69304666/packages/npm/"
+  },
+  "keywords": [
+    "openapi-client",
+    "openapi-generator"
+  ],
+  "license": "Unlicense",
+  "scripts": {
+    "build": "ng-packagr -p ng-package.json"
+  },
+  "peerDependencies": {
+    "@angular/core": "^19.0.0",
+    "rxjs": "^7.4.0"
+  },
+  "devDependencies": {
+    "@angular/common": "^19.0.0",
+    "@angular/compiler": "^19.0.0",
+    "@angular/compiler-cli": "^19.0.0",
+    "@angular/core": "^19.0.0",
+    "@angular/platform-browser": "^19.0.0",
+    "ng-packagr": "^19.0.0",
+    "reflect-metadata": "^0.1.3",
+    "rxjs": "^7.4.0",
+    "typescript": ">=5.5.0 <5.7.0",
+    "zone.js": "^0.15.0"
+  }}

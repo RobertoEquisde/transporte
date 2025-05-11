@@ -7,17 +7,17 @@ stages:
 build:
   stage: build
   script:
-    - cd api-client
+    - cd api-angular-client
     - npm ci
     - npm run build
   artifacts:
     paths:
-      - api-client/dist/
+      - api-angular-client/dist/
 
 publish:
   stage: publish
   script:
-    - cd api-client
+    - cd api-angular-client
     - npm ci
     - npm version patch
     - echo "//gitlab.com/api/v4/projects/69304666/packages/npm/:_authToken=${CI_JOB_TOKEN}" > .npmrc

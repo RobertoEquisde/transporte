@@ -1,0 +1,17 @@
+export * from './authController.service';
+import { AuthControllerService } from './authController.service';
+export * from './cobrosController.service';
+import { CobrosControllerService } from './cobrosController.service';
+export * from './distribuidorController.service';
+import { DistribuidorControllerService } from './distribuidorController.service';
+export * from './modeloController.service';
+import { ModeloControllerService } from './modeloController.service';
+export * from './reporteFinancieroController.service';
+import { ReporteFinancieroControllerService } from './reporteFinancieroController.service';
+export * from './seguroController.service';
+import { SeguroControllerService } from './seguroController.service';
+export * from './txtImportController.service';
+import { TxtImportControllerService } from './txtImportController.service';
+export * from './unidadController.service';
+import { UnidadControllerService } from './unidadController.service';
+export const APIS = [AuthControllerService, CobrosControllerService, DistribuidorControllerService, ModeloControllerService, ReporteFinancieroControllerService, SeguroControllerService, TxtImportControllerService, UnidadControllerService];
