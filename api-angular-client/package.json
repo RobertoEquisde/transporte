@@ -1,6 +1,6 @@
 {
   "name": "@robertoruvalcaba/transporte-api",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "OpenAPI client for @robertoruvalcaba/transporte-api",
   "author": "OpenAPI-Generator Contributors",
   "repository": {
@@ -8,7 +8,7 @@
     "url": "https://github.com/GIT_USER_ID/GIT_REPO_ID.git"
   },
   "publishConfig": {
-  "registry": "https://gitlab.com/api/v4/projects/69304666/packages/npm/"
+    "registry": "https://gitlab.com/api/v4/projects/69304666/packages/npm/"
   },
   "keywords": [
     "openapi-client",
@@ -33,4 +33,5 @@
     "rxjs": "^7.4.0",
     "typescript": ">=5.5.0 <5.7.0",
     "zone.js": "^0.15.0"
-  }}
+  }
+}
