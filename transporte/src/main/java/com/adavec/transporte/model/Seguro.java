@@ -3,6 +3,8 @@ package com.adavec.transporte.model;
 import jakarta.persistence.*;
 import lombok.Data;
 
+import java.time.LocalDate;
+
 @Entity
 @Table(name = "seguros")
 @Data
@@ -30,5 +32,6 @@ public class Seguro {
     private Double seguroDistribuidor;
     @Column(name = "cuotaSeguro")
     private Double cuotaSeguro;
-
+    @Column(name = "cuotaFactura")
+    private LocalDate fechaFactura;
 }

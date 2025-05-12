@@ -19,8 +19,9 @@ publish:
   script:
     - cd api-angular-client
     - npm ci
-    - npm version patch
+    - npm run build
+    - npm version patch --no-git-tag-version
     - echo "//gitlab.com/api/v4/projects/69304666/packages/npm/:_authToken=${CI_JOB_TOKEN}" > .npmrc
-    - npm publish
+    - npm publish || echo "Ya existe esta versión. Publicación omitida."
   only:
     - main

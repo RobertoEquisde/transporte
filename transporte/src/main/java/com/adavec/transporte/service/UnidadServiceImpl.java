@@ -104,8 +104,9 @@ public class UnidadServiceImpl implements UnidadService {
     }
     @Override
     public Distribuidor buscarDistribuidorPorClave(String clave) {
-        return distribuidorRepository.findByClaveDistribuidora(clave)
+        return distribuidorRepository.findFirstByClaveDistribuidora(clave)
                 .orElseThrow(() -> new RuntimeException("Distribuidor no encontrado con clave: " + clave));
     }
+
 
 }

@@ -14,7 +14,6 @@ import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.List;
 import java.util.stream.Collectors;
-
 @Service
 public class ReporteFinancieroServiceImpl implements ReporteFinancieroService {
 
@@ -35,24 +34,35 @@ public class ReporteFinancieroServiceImpl implements ReporteFinancieroService {
 
         return unidadRepository.findByDebisFechaBetween(inicio, fin).stream().map(unidad -> {
             ReporteFinancieroDTO dto = new ReporteFinancieroDTO();
+
+            // Modelo y distribuidor
             dto.setNoSerie(unidad.getNoSerie());
             dto.setModelo(unidad.getModelo() != null ? unidad.getModelo().getNombre() : "SIN MODELO");
-            dto.setUso(unidad.getModelo() != null ? unidad.getModelo().getUso() : "N/A");
             dto.setDistribuidora(unidad.getDistribuidor() != null ? unidad.getDistribuidor().getNombreDistribuidora() : "SIN DISTRIBUIDORA");
+            dto.setClaveDistribuidor(unidad.getDistribuidor() != null ? unidad.getDistribuidor().getClaveDistribuidora() : "");
 
-            dto.setDistribuidora(unidad.getDistribuidor().getNombreDistribuidora());
-            dto.setValorUnidad(unidad.getValorUnidad());
+            // Valor unidad e intereses base
+            Double valorUnidad = unidad.getValorUnidad() != null ? unidad.getValorUnidad() : 0.0;
+            dto.setValorUnidad(valorUnidad);
 
+            // Fechas
+            String fechaDebis = unidad.getDebisFecha() != null ? unidad.getDebisFecha().toString() : "";
+            dto.setFechaFactura(fechaDebis);
+            dto.setFechaInteres(fechaDebis);  // mismo que debisFecha en este contexto
+            dto.setFechaProceso(LocalDate.now().toString());
+
+            // Seguro
             Seguro seguro = seguroRepository.findByUnidadId(unidad.getId());
-            dto.setValorSeguro(seguro != null ? seguro.getValorSeguro() : 0.0);
-            dto.setCuotaSeguro(seguro != null ? seguro.getSeguroDistribuidor() : 0.0);
-            dto.setFechaFactura(unidad.getDebisFecha() != null ? unidad.getDebisFecha().toString() : "");
+            dto.setNumeroFactura(seguro != null ? seguro.getFactura() : "");
+            dto.setCuotaSeguro(valorUnidad * 0.0324);     // 3.24%
+            dto.setSeguro(valorUnidad * 0.0134);          // 1.34%
 
-            List<Cobros> cobrosList = cobrosRepository.findByUnidadId(unidad.getId());
-            Cobros cobros = cobrosList.isEmpty() ? null : cobrosList.get(0);
-
-            dto.setTarifaUnica(cobros != null ? cobros.getTarifaUnica() : 0.0);
+            // Cobros
+            Cobros cobros = cobrosRepository.findByUnidadId(unidad.getId()).stream().findFirst().orElse(null);
+            dto.setImporteTraslado(cobros != null ? cobros.getTarifaUnica() : 0.0);
             dto.setFondoEstrella(cobros != null ? cobros.getFondoEstrella() : 0.0);
+            dto.setDias(cobros != null ? cobros.getDias() : 0);
+            dto.setCuotaAsociacion(cobros != null ? cobros.getCuotaAsociacion() : 0.0);
 
             return dto;
         }).collect(Collectors.toList());

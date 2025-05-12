@@ -39,9 +39,9 @@ public class ReporteFinancieroController {
 
         int rowIdx = 0;
         String[] columnas = {
-                "NoSerie", "Modelo", "Uso", "Distribuidora", "ValorUnidad",
-                "TarifaUnica", "CuotaSeguro", "ValorSeguro", "FondoEstrella",
-                "FechaFactura"
+                "FechaProceso", "ClaveDistribuidor", "NumeroFactura", "Modelo", "NoSerie",
+                "FechaFactura", "FechaInteres", "Dias", "ImporteFactura", "CuotaAsociacion",
+                "CuotaSeguro (3.24%)", "Seguro (1.34%)", "FondoEstrella"
         };
 
         Row encabezado = sheet.createRow(rowIdx++);
@@ -51,16 +51,19 @@ public class ReporteFinancieroController {
 
         for (ReporteFinancieroDTO dto : filas) {
             Row row = sheet.createRow(rowIdx++);
-            row.createCell(0).setCellValue(dto.getNoSerie());
-            row.createCell(1).setCellValue(dto.getModelo());
-            row.createCell(2).setCellValue(dto.getUso());
-            row.createCell(3).setCellValue(dto.getDistribuidora());
-            row.createCell(4).setCellValue(dto.getValorUnidad());
-            row.createCell(5).setCellValue(dto.getTarifaUnica());
-            row.createCell(6).setCellValue(dto.getCuotaSeguro());
-            row.createCell(7).setCellValue(dto.getValorSeguro());
-            row.createCell(8).setCellValue(dto.getFondoEstrella());
-            row.createCell(9).setCellValue(dto.getFechaFactura());
+            row.createCell(0).setCellValue(dto.getFechaProceso());
+            row.createCell(1).setCellValue(dto.getClaveDistribuidor());
+            row.createCell(2).setCellValue(dto.getNumeroFactura());
+            row.createCell(3).setCellValue(dto.getModelo());
+            row.createCell(4).setCellValue(dto.getNoSerie());
+            row.createCell(5).setCellValue(dto.getFechaFactura());
+            row.createCell(6).setCellValue(dto.getFechaInteres());
+            row.createCell(7).setCellValue(dto.getDias());
+            row.createCell(8).setCellValue(dto.getValorUnidad());
+            row.createCell(9).setCellValue(dto.getCuotaAsociacion());
+            row.createCell(10).setCellValue(dto.getCuotaSeguro());
+            row.createCell(11).setCellValue(dto.getSeguro());
+            row.createCell(12).setCellValue(dto.getFondoEstrella());
         }
 
         workbook.write(response.getOutputStream());

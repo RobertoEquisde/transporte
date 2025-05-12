@@ -32,4 +32,10 @@ public class Cobros {
 
     @Column(name = "fechaTraslado")
     private LocalDate fechaTraslado;
+
+    @Column(name = "fechaProceso")
+    private LocalDate fechaProceso;
+    @Column(name = "fechaInteres")
+    private LocalDate fechaInteres;
+
 }
