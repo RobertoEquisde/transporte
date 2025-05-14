@@ -11,9 +11,9 @@ generate-api-client:
     - cd api-client
     - rm -rf src/app/api
     - npx openapi-typescript-codegen \
-        --input https://transporte-api-latest.onrender.com/v3/api-docs \
-        --output src/app/api \
-        --client axios
+      --input https://transporte-api-latest.onrender.com/v3/api-docs \
+      --output src/app/api \
+      --client axios
     - git config user.email "ci-bot@example.com"
     - git config user.name "CI Bot"
     - git add src/app/api
