@@ -9,14 +9,17 @@ generate-api-client:
     - npm install -g @angular/cli@19
     # Instalar generador de cliente OpenAPI
     - npm install -g openapi-typescript-codegen
-    # Clonar el repositorio con el token directo (¡solo para prueba!)
-    - git clone https://oauth2:glpat-aiCyTfjmfz___E9Gspxg@gitlab.com/projects-dev4/adavec/prefactura-api-client.git api-client
+    # Clonar el repositorio con el token directo (PRUEBA)
+    - git clone https://oauth2:glpat-aiCyTfjmfz___E9Gspxg@gitlab.com/robertoruvalcaba/prefactura-api-client.git api-client
     - cd api-client
+    # Limpiar la carpeta generada anteriormente
     - rm -rf src/app/api
+    # Generar nueva versión desde tu Swagger público
     - openapi-typescript-codegen \
         --input https://transporte-api-latest.onrender.com/v3/api-docs \
         --output src/app/api \
         --client axios
+    # Configurar Git para commit automático
     - git config user.email "ci-bot@example.com"
     - git config user.name "CI Bot"
     - git add src/app/api
