@@ -1,27 +1,28 @@
-image: node:latest
-
 stages:
-  - build
-  - publish
+  - generate
 
-build:
-  stage: build
+generate-api-client:
+  stage: generate
+  image: node:20.17.0
   script:
-    - cd api-angular-client
-    - npm ci
-    - npm run build
-  artifacts:
-    paths:
-      - api-angular-client/dist/
+    # Instalar Angular CLI 19 globalmente
+    - npm install -g @angular/cli@19
+    # Instalar generador de cliente OpenAPI
+    - npm install -g openapi-typescript-codegen
+    # Clonar el repositorio donde se guarda la librería generada
+    - git clone "$API_CLIENT_REPO" api-client
+    - cd api-client
+    # Limpiar la carpeta generada anteriormente
+    - rm -rf src/app/api
+    # Generar nueva versión desde tu Swagger público
+    - openapi-typescript-codegen \
+        --input https://transporte-api-latest.onrender.com/v3/api-docs \
+        --output src/app/api \
+        --client axios
+    # Configuración de git para el commit automático
+    - git config user.email "ci-bot@example.com"
+    - git config user.name "CI Bot"
+    - git add src/app/api
+    - git commit -m "🔁 Auto-generado desde backend commit $CI_COMMIT_SHORT_SHA" || echo "Sin cambios"
+    - git push origin main
 
-publish:
-  stage: publish
-  script:
-    - cd api-angular-client
-    - npm ci
-    - npm run build
-    - npm version patch --no-git-tag-version
-    - echo "//gitlab.com/api/v4/projects/69304666/packages/npm/:_authToken=${CI_JOB_TOKEN}" > .npmrc
-    - npm publish || echo "Ya existe esta versión. Publicación omitida."
-  only:
-    - main
