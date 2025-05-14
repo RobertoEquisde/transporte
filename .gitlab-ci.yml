@@ -1,6 +1,6 @@
 stages:
   - build-and-push
-
+  - generate
 # Etapa unificada para construir y subir la imagen Docker, y generar el cliente API
 build-and-push:
   stage: build-and-push
@@ -34,5 +34,23 @@ build-and-push:
     paths:
       - /builds/$CI_PROJECT_PATH/$CI_COMMIT_REF_NAME/Dockerfile
     expire_in: 1 hour
+  only:
+    - main
+# 3. GENERACIÓN DE LA LIBRERÍA API CLIENT
+generate-api-client:
+  stage: generate
+  image: node:20.17.0
+  script:
+    - npm install -g @angular/cli@19
+    - npm install -g openapi-typescript-codegen
+    - git clone https://oauth2:${CI_PUSH_TOKEN}@gitlab.com/projects-dev4/adavec/prefactura-api-client.git api-client
+    - cd api-client
+    - rm -rf src/app/api
+    - npx openapi-typescript-codegen --input https://transporte-api-latest.onrender.com/v3/api-docs --output src/app/api --client axios
+    - git config user.email "ci-bot@example.com"
+    - git config user.name "CI Bot"
+    - git add src/app/api
+    - git commit -m "🔁 Auto-generado desde backend commit $CI_COMMIT_SHORT_SHA" || echo "Sin cambios"
+    - git push origin main
   only:
     - main
