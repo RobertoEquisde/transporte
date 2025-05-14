@@ -18,18 +18,7 @@ build-and-push:
     - docker pull $CI_REGISTRY_IMAGE:latest || echo "No image found, skipping push."
     # Subir la imagen a Docker Hub
     - docker push robertoruvalcaba/transporte-api:latest
-    # Generación del cliente API después de construir la imagen
-    - npm install -g @angular/cli@19
-    - npm install -g openapi-typescript-codegen
-    - git clone https://oauth2:${CI_PUSH_TOKEN}@gitlab.com/projects-dev4/adavec/prefactura-api-client.git api-client
-    - cd api-client
-    - rm -rf src/app/api
-    - npx openapi-typescript-codegen --input https://transporte-api-latest.onrender.com/v3/api-docs --output src/app/api --client axios
-    - git config user.email "ci-bot@example.com"
-    - git config user.name "CI Bot"
-    - git add src/app/api
-    - git commit -m "🔁 Auto-generado desde backend commit $CI_COMMIT_SHORT_SHA" || echo "Sin cambios"
-    - git push origin main
+   
   artifacts:
     paths:
       - /builds/$CI_PROJECT_PATH/$CI_COMMIT_REF_NAME/Dockerfile
