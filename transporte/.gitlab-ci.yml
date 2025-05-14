@@ -12,7 +12,7 @@ build-backend:
   before_script:
     - apk add --no-cache git
   script:
-    - docker build -t $CI_REGISTRY_IMAGE:latest .
+    - docker build -t $CI_REGISTRY_IMAGE:latest -f Dockerfile .
 
 generate-api-client:
   stage: generate-client
