@@ -7,7 +7,7 @@ generate-api-client:
   script:
     - npm install -g @angular/cli@19
     - npm install -g openapi-typescript-codegen
-    - git clone https://oauth2:glpat-aiCyTfjmfz___E9Gspxg@gitlab.com/projects-dev/Adavec/prefactura-api-client.git api-client
+    - git clone https://oauth2:glpat-aiCyTfjmfz___E9Gspxg@gitlab.com/projects-dev4/adavec/prefactura-api-client.git api-client
     - cd api-client
     - rm -rf src/app/api
     - openapi-typescript-codegen \
