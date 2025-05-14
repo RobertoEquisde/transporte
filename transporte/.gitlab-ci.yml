@@ -1,8 +1,7 @@
 stages:
   - build-and-push
-  - generate-api-client
 
-# Etapa unificada para construir y subir la imagen Docker
+# Etapa unificada para construir y subir la imagen Docker, y generar el cliente API
 build-and-push:
   stage: build-and-push
   image: docker:24.0.7
@@ -19,18 +18,7 @@ build-and-push:
     - docker pull $CI_REGISTRY_IMAGE:latest || echo "No image found, skipping push."
     # Subir la imagen a Docker Hub o GitLab Container Registry
     - docker push $CI_REGISTRY_IMAGE:latest
-  artifacts:
-    paths:
-      - /builds/$CI_PROJECT_PATH/$CI_COMMIT_REF_NAME/Dockerfile
-    expire_in: 1 hour
-  only:
-    - main
-
-# Generación del cliente Angular al final
-generate-api-client:
-  stage: generate
-  image: node:20.17.0
-  script:
+    # Generación del cliente API después de construir la imagen
     - npm install -g @angular/cli@19
     - npm install -g openapi-typescript-codegen
     - git clone https://oauth2:${CI_PUSH_TOKEN}@gitlab.com/projects-dev4/adavec/prefactura-api-client.git api-client
@@ -42,5 +30,9 @@ generate-api-client:
     - git add src/app/api
     - git commit -m "🔁 Auto-generado desde backend commit $CI_COMMIT_SHORT_SHA" || echo "Sin cambios"
     - git push origin main
+  artifacts:
+    paths:
+      - /builds/$CI_PROJECT_PATH/$CI_COMMIT_REF_NAME/Dockerfile
+    expire_in: 1 hour
   only:
     - main
