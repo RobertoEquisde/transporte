@@ -1,21 +1,34 @@
 stages:
   - generate
-
+  - docker
 generate-api-client:
   stage: generate
   image: node:20.17.0
   script:
     - npm install -g @angular/cli@19
     - npm install -g openapi-typescript-codegen
-    - git clone https://oauth2:glpat-aiCyTfjmfz___E9Gspxg@gitlab.com/projects-dev4/adavec/prefactura-api-client.git api-client
+    - git clone https://oauth2:${CI_PUSH_TOKEN}@gitlab.com/projects-dev4/adavec/prefactura-api-client.git api-client
     - cd api-client
     - rm -rf src/app/api
-    # Opción 1: Usar npx para ejecutar el comando
-    - npx openapi-typescript-codegen --input https://transporte-api-latest.onrender.com/v3/api-docs --output src/app/api --client axios
-    # Opción alternativa 2: Usar la ruta completa al ejecutable
-    # - $(npm bin -g)/openapi-typescript-codegen --input https://transporte-api-latest.onrender.com/v3/api-docs --output src/app/api --client axios
+    - npx openapi-typescript-codegen \
+        --input https://transporte-api-latest.onrender.com/v3/api-docs \
+        --output src/app/api \
+        --client axios
     - git config user.email "ci-bot@example.com"
     - git config user.name "CI Bot"
     - git add src/app/api
     - git commit -m "🔁 Auto-generado desde backend commit $CI_COMMIT_SHORT_SHA" || echo "Sin cambios"
     - git push origin main
+build-and-push-docker:
+  stage: docker
+  image: docker:latest
+  services:
+    - docker:dind
+  variables:
+    DOCKER_HOST: tcp://docker:2375/
+    DOCKER_TLS_CERTDIR: ""
+  before_script:
+    - echo "$DOCKERHUB_PASSWORD" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
+  script:
+    - docker build -t robertoruvalcaba/transporte-api:latest .
+    - docker push robertoruvalcaba/transporte-api:latest
