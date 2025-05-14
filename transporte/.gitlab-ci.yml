@@ -18,6 +18,7 @@ build-docker:
       - /builds/$CI_PROJECT_PATH/$CI_COMMIT_REF_NAME/Dockerfile
     expire_in: 1 hour
   only:
+  - main
 # Etapa opcional para subir la imagen a Docker Hub o GitLab Container Registry
 push-docker:
   stage: push
@@ -26,6 +27,9 @@ push-docker:
     - docker:24.0.7-dind
   script:
     - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin $CI_REGISTRY
+    # Asegurarse de que la imagen se descargue antes de intentar subirla
+    - docker pull $CI_REGISTRY_IMAGE:latest || echo "No image found, skipping push."
+    # Subir la imagen a Docker Hub o GitLab Container Registry
     - docker push $CI_REGISTRY_IMAGE:latest
   dependencies:
     - build-docker
