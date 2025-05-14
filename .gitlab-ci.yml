@@ -11,13 +11,13 @@ build-and-push:
     - apk add --no-cache git nodejs npm
   script:
     # Construir la imagen Docker
-    - docker build -t $CI_REGISTRY_IMAGE:latest .
+    - docker build -t $CI_REGISTRY_IMAGE:latest -t robertoruvalcaba/transporte-api:latest .
     # Loguearse en DockerHub o GitLab Container Registry
-    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin $CI_REGISTRY
+    - echo "$DOCKERHUB_PASSWORD" | docker login -u "robertoruvalcaba" --password-stdin
     # Asegurarse de que la imagen se descargue antes de intentar subirla
     - docker pull $CI_REGISTRY_IMAGE:latest || echo "No image found, skipping push."
-    # Subir la imagen a Docker Hub o GitLab Container Registry
-    - docker push $CI_REGISTRY_IMAGE:latest
+    # Subir la imagen a Docker Hub
+    - docker push robertoruvalcaba/transporte-api:latest
     # Generación del cliente API después de construir la imagen
     - npm install -g @angular/cli@19
     - npm install -g openapi-typescript-codegen
