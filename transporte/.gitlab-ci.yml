@@ -27,10 +27,13 @@ push-docker:
     - echo "$DOCKERHUB_PASSWORD" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
 
     # Construir la imagen de Docker y etiquetarla correctamente
-    - docker build -t $CI_REGISTRY_IMAGE:latest -f Dockerfile .
+    - docker build -t $DOCKERHUB_USERNAME/$IMAGE_NAME:latest -f Dockerfile .
 
     # Verificar que la imagen fue creada
     - docker images
+
+    # Subir la imagen a DockerHub
+    - docker push $DOCKERHUB_USERNAME/$IMAGE_NAME:latest
   only:
     - main
 
