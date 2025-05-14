@@ -3,37 +3,32 @@ stages:
   - push
   - generate
 
-# 1. CONSTRUCCIÓN DE LA IMAGEN DOCKER
-build-docker-image:
+# Etapa de build de imagen Docker
+build-docker:
   stage: build
   image: docker:24.0.7
   services:
     - docker:24.0.7-dind
-  variables:
-    DOCKER_HOST: tcp://docker:2375/
-    DOCKER_TLS_CERTDIR: ""
+  before_script:
+    - apk add --no-cache git
   script:
-    # Reemplaza "ruta/al/Dockerfile" con la ubicación real de tu Dockerfile
-    - docker build -t robertoruvalcaba/transporte-api:latest -f ruta/al/Dockerfile .
+    - docker build -t $CI_REGISTRY_IMAGE:latest .
   only:
     - main
 
-# 2. PUSH A DOCKER HUB
-push-docker-image:
+# Etapa opcional para subir la imagen a Docker Hub o GitLab Container Registry
+push-docker:
   stage: push
   image: docker:24.0.7
   services:
     - docker:24.0.7-dind
-  variables:
-    DOCKER_HOST: tcp://docker:2375/
-    DOCKER_TLS_CERTDIR: ""
   script:
-    - docker login -u "$DOCKER_USER" -p "$DOCKER_PASSWORD"
-    - docker push robertoruvalcaba/transporte-api:latest
+    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin $CI_REGISTRY
+    - docker push $CI_REGISTRY_IMAGE:latest
   only:
     - main
 
-# 3. GENERACIÓN DE LA LIBRERÍA API CLIENT
+# Generación del cliente Angular al final
 generate-api-client:
   stage: generate
   image: node:20.17.0
