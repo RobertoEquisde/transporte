@@ -1,21 +1,42 @@
 stages:
   - build
-  - generate-client
+  - push
+  - generate
 
-build-backend:
+# Etapa de build de imagen Docker
+build-docker:
   stage: build
   image: docker:24.0.7
   services:
     - docker:24.0.7-dind
-  variables:
-    DOCKER_DRIVER: overlay2
   before_script:
     - apk add --no-cache git
   script:
+    - docker build -t $CI_REGISTRY_IMAGE:latest .
+  only:
+    - main
+
+# Etapa opcional para subir la imagen a Docker Hub o GitLab Container Registry
+push-docker:
+  stage: push
+  image: docker:24.0.7
+  services:
+    - docker:24.0.7-dind
+  script:
+       # Loguearse en DockerHub usando las variables de entorno
+    - echo "$DOCKERHUB_PASSWORD" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
+
+    # Construir la imagen de Docker y etiquetarla correctamente
     - docker build -t $CI_REGISTRY_IMAGE:latest -f Dockerfile .
 
+    # Verificar que la imagen fue creada
+    - docker images
+  only:
+    - main
+
+# Generación del cliente Angular al final
 generate-api-client:
-  stage: generate-client
+  stage: generate
   image: node:20.17.0
   script:
     - npm install -g @angular/cli@19
@@ -29,3 +50,5 @@ generate-api-client:
     - git add src/app/api
     - git commit -m "🔁 Auto-generado desde backend commit $CI_COMMIT_SHORT_SHA" || echo "Sin cambios"
     - git push origin main
+  only:
+    - main
