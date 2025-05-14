@@ -13,7 +13,8 @@ build-docker-image:
     DOCKER_HOST: tcp://docker:2375/
     DOCKER_TLS_CERTDIR: ""
   script:
-    - docker build -t robertoruvalcaba/transporte-api:latest .
+    # Reemplaza "ruta/al/Dockerfile" con la ubicación real de tu Dockerfile
+    - docker build -t robertoruvalcaba/transporte-api:latest -f ruta/al/Dockerfile .
   only:
     - main
 

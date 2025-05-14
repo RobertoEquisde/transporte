@@ -1,12 +1,26 @@
-# Ignorar carpetas que no deben entrar al contenedor
+# Maven
+target/
+!target/*.jar
+*.class
+.mvn/
 
-.git/
-.gitignore
-Dockerfile
-README.md
-*.iml
+# IDE
 .idea/
 .vscode/
-node_modules/
-.env
+*.iml
+*.iws
+*.ipr
+*.swp
+*.swo
+
+# Logs
+logs/
 *.log
+
+# Sistema
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
