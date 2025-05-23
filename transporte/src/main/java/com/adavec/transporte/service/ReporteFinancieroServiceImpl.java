@@ -54,15 +54,34 @@ public class ReporteFinancieroServiceImpl implements ReporteFinancieroService {
             // Seguro
             Seguro seguro = seguroRepository.findByUnidadId(unidad.getId());
             dto.setNumeroFactura(seguro != null ? seguro.getFactura() : "");
-            dto.setCuotaSeguro(valorUnidad * 0.0324);     // 3.24%
-            dto.setSeguro(valorUnidad * 0.0134);          // 1.34%
+            dto.setCuotaSeguro(valorUnidad * 0.00324);
+            dto.setSeguro(valorUnidad * 0.00134);
 
             // Cobros
             Cobros cobros = cobrosRepository.findByUnidadId(unidad.getId()).stream().findFirst().orElse(null);
-            dto.setImporteTraslado(cobros != null ? cobros.getTarifaUnica() : 0.0);
-            dto.setFondoEstrella(cobros != null ? cobros.getFondoEstrella() : 0.0);
-            dto.setDias(cobros != null ? cobros.getDias() : 0);
-            dto.setCuotaAsociacion(cobros != null ? cobros.getCuotaAsociacion() : 0.0);
+            // Actualizar fechas desde Cobros si existe, si no usar fechaDebis como fallback
+            if (cobros != null) {
+                // Fecha de factura desde cobros
+                dto.setFechaFactura(cobros.getFechaTraslado() != null ?
+                        cobros.getFechaTraslado().toString() : fechaDebis);
+
+                // Fecha de interés desde cobros
+                dto.setFechaInteres(cobros.getFechaInteres() != null ?
+                        cobros.getFechaInteres().toString() : fechaDebis);
+
+                dto.setImporteTraslado(cobros.getTarifaUnica());
+                dto.setFondoEstrella(cobros.getFondoEstrella());
+                dto.setDias(cobros.getDias());
+                dto.setCuotaAsociacion(cobros.getCuotaAsociacion());
+            } else {
+                // Si no hay cobros, usar valores por defecto
+                dto.setFechaFactura(fechaDebis);
+                dto.setFechaInteres(fechaDebis);
+                dto.setImporteTraslado(0.0);
+                dto.setFondoEstrella(0.0);
+                dto.setDias(0);
+                dto.setCuotaAsociacion(0.0);
+            }
 
             return dto;
         }).collect(Collectors.toList());

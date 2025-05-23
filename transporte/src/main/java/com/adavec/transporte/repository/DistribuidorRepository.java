@@ -9,5 +9,7 @@ import java.util.Optional;
 public interface DistribuidorRepository extends JpaRepository<Distribuidor, Integer> {
     List<Distribuidor> findByClaveDistribuidoraContainingIgnoreCase(String clave);
     Optional<Distribuidor> findFirstByClaveDistribuidora(String clave);
+    Optional<Distribuidor> findByClaveDistribuidora(String claveDistribuidora);
+
 
 }

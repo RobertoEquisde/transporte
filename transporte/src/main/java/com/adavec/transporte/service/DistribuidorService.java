@@ -17,7 +17,9 @@ public class DistribuidorService {
     public DistribuidorService(DistribuidorRepository distribuidorRepository) {
         this.distribuidorRepository = distribuidorRepository;
     }
-
+    public Optional<Distribuidor> buscarPorClaveExacta(String claveDistribuidora) {
+        return distribuidorRepository.findByClaveDistribuidora(claveDistribuidora);
+    }
     public List<Distribuidor> obtenerTodos() {
         return distribuidorRepository.findAll();
     }
