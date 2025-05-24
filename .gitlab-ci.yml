@@ -21,7 +21,7 @@ build-and-push:
    
   artifacts:
     paths:
-      - /builds/$CI_PROJECT_PATH/$CI_COMMIT_REF_NAME/Dockerfile
+      - Dockerfile
     expire_in: 1 hour
   only:
     - main
