@@ -191,12 +191,18 @@ public class UnidadServiceImpl implements UnidadService {
             // e.g., unidadExistente.setDistribuidor(null);
             // Or throw bad request: throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "ID de Distribuidor es requerido para actualizar la asociación de distribuidor.");
         }
+        // Update Seguro if seguro DTO is present and contains an ID
+        if (requestDTO.getSeguro() != null && requestDTO.getSeguro().getId() != null) {
+            Seguro seguro = seguroRepository.findById(requestDTO.getSeguro().getId())
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                            "Seguro no encontrado con ID: " + requestDTO.getSeguro().getId()));
 
-        // The 'seguro' field in UnidadDTO (SeguroResumenDTO) is generally for display.
-        // Updating Seguro information usually happens via its own dedicated service/endpoint.
-        // If specific fields from requestDTO.getSeguro() were intended to trigger updates
-        // to the related Seguro entity, that logic would need to be explicitly added here.
-        // For this example, we are not modifying the Seguro entity based on UnidadDTO's seguro field.
+            // Actualizar la relación desde el lado de Seguro
+            seguro.setUnidad(unidadExistente);
+            seguroRepository.save(seguro);
+        } else if (requestDTO.getSeguro() != null && requestDTO.getSeguro().getId() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "ID de Seguro es requerido para actualizar la asociación de seguro.");
+        }
 
         return unidadRepository.save(unidadExistente);
     }
