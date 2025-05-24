@@ -1,5 +1,6 @@
 package com.adavec.transporte.service.impl;
 
+import com.adavec.transporte.dto.UnidadDTO;
 import com.adavec.transporte.dto.UnidadReporteDTO;
 import com.adavec.transporte.model.Distribuidor;
 import com.adavec.transporte.model.Modelo;
@@ -11,10 +12,13 @@ import com.adavec.transporte.repository.SeguroRepository;
 import com.adavec.transporte.repository.UnidadRepository;
 import com.adavec.transporte.service.UnidadService;
 import jakarta.transaction.Transactional;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDate;
 import java.time.YearMonth;
+import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -107,6 +111,94 @@ public class UnidadServiceImpl implements UnidadService {
         return distribuidorRepository.findFirstByClaveDistribuidora(clave)
                 .orElseThrow(() -> new RuntimeException("Distribuidor no encontrado con clave: " + clave));
     }
+    @Transactional
+    @Override
+    public Unidad actualizarUnidad(Integer id, UnidadDTO requestDTO) {
+        Unidad unidadExistente = unidadRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "No se encontró unidad con ID: " + id));
 
+        // Optional: Validate if the ID in DTO (if present) matches the path variable ID
+        if (requestDTO.getId() != null && !requestDTO.getId().equals(id)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El ID en el cuerpo ("+ requestDTO.getId() +") no coincide con el ID en la URL ("+ id +").");
+        }
+
+        // Update direct fields if provided in the requestDTO
+        // For PUT, nulls in request often mean "set to null". If only non-null fields should update, that's more like PATCH.
+        // The checks below implement a "update if key is present and value is not null" for most fields,
+        // and "update to null if key is present and value is empty string/specific indicator for dates"
+
+        if (requestDTO.getNoSerie() != null) {
+            unidadExistente.setNoSerie(requestDTO.getNoSerie());
+        }
+        if (requestDTO.getComentario() != null) {
+            unidadExistente.setComentario(requestDTO.getComentario());
+        }
+        if (requestDTO.getOrigen() != null) {
+            unidadExistente.setOrigen(requestDTO.getOrigen());
+        }
+        if (requestDTO.getReportadoA() != null) {
+            unidadExistente.setReportadoA(requestDTO.getReportadoA());
+        }
+        if (requestDTO.getValorUnidad() != null) {
+            unidadExistente.setValorUnidad(requestDTO.getValorUnidad());
+        }
+
+        // Handle date strings from DTO
+        if (requestDTO.getDebisFecha() != null) { // If key "debisFecha" is present
+            if (requestDTO.getDebisFecha().trim().isEmpty()) {
+                unidadExistente.setDebisFecha(null); // Set to null if an empty string is passed
+            } else {
+                try {
+                    unidadExistente.setDebisFecha(LocalDate.parse(requestDTO.getDebisFecha()));
+                } catch (DateTimeParseException e) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Formato de DebisFecha inválido. Use yyyy-MM-dd.", e);
+                }
+            }
+        }
+
+        if (requestDTO.getPagoDistribuidora() != null) { // If key "pagoDistribuidora" is present
+            if (requestDTO.getPagoDistribuidora().trim().isEmpty()) {
+                unidadExistente.setPagoDistribuidora(null); // Set to null if an empty string is passed
+            } else {
+                try {
+                    unidadExistente.setPagoDistribuidora(LocalDate.parse(requestDTO.getPagoDistribuidora()));
+                } catch (DateTimeParseException e) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Formato de PagoDistribuidora inválido. Use yyyy-MM-dd.", e);
+                }
+            }
+        }
+
+        // Update Modelo if modelo DTO is present and contains an ID
+        if (requestDTO.getModelo() != null && requestDTO.getModelo().getId() != null) {
+            Modelo modelo = modeloRepository.findById(requestDTO.getModelo().getId())
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Modelo no encontrado con ID: " + requestDTO.getModelo().getId()));
+            unidadExistente.setModelo(modelo);
+        } else if (requestDTO.getModelo() != null && requestDTO.getModelo().getId() == null) {
+            // If you want to allow unsetting the modelo by passing `modelo: {}` or `modelo: {id: null}`
+            // you could add: unidadExistente.setModelo(null);
+            // For now, this case is ignored if ID is missing.
+            // Or throw bad request: throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "ID de Modelo es requerido para actualizar la asociación de modelo.");
+        }
+
+
+        // Update Distribuidor if distribuidor DTO is present and contains an ID
+        if (requestDTO.getDistribuidor() != null && requestDTO.getDistribuidor().getId() != null) {
+            Distribuidor distribuidor = distribuidorRepository.findById(requestDTO.getDistribuidor().getId())
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Distribuidor no encontrado con ID: " + requestDTO.getDistribuidor().getId()));
+            unidadExistente.setDistribuidor(distribuidor);
+        } else if (requestDTO.getDistribuidor() != null && requestDTO.getDistribuidor().getId() == null) {
+            // Similar to Modelo, define behavior for unsetting or require ID.
+            // e.g., unidadExistente.setDistribuidor(null);
+            // Or throw bad request: throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "ID de Distribuidor es requerido para actualizar la asociación de distribuidor.");
+        }
+
+        // The 'seguro' field in UnidadDTO (SeguroResumenDTO) is generally for display.
+        // Updating Seguro information usually happens via its own dedicated service/endpoint.
+        // If specific fields from requestDTO.getSeguro() were intended to trigger updates
+        // to the related Seguro entity, that logic would need to be explicitly added here.
+        // For this example, we are not modifying the Seguro entity based on UnidadDTO's seguro field.
+
+        return unidadRepository.save(unidadExistente);
+    }
 
 }

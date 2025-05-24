@@ -53,16 +53,13 @@ public class CustomUserDetailsService implements UserDetailsService {
 
     private UserDetails createUserPrincipal(User user) {
         Collection<GrantedAuthority> authorities = Collections.singleton(
-                new SimpleGrantedAuthority("ROLE_" + user.getRole().name())
+                new SimpleGrantedAuthority(user.getRole().name()) // ✅ Sin concatenar "ROLE_"
         );
 
         return org.springframework.security.core.userdetails.User.builder()
                 .username(user.getUsername())
                 .password(user.getPassword())
                 .authorities(authorities)
-                .accountExpired(false)
-                .accountLocked(false)
-                .credentialsExpired(false)
                 .disabled(!user.isActive())
                 .build();
     }

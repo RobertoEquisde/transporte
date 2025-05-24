@@ -54,4 +54,33 @@ public class CobrosService {
         return cobrosRepository.save(cobro);
     }
 
+    public Cobros actualizarCobro(Integer id, CrearCobroRequest request) {
+        // 1. Buscar el cobro existente
+        Cobros cobroExistente = cobrosRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Cobro no encontrado"));
+
+        // 2. Validar y obtener la unidad
+        Unidad unidad = unidadRepository.findById(request.getUnidadId())
+                .orElseThrow(() -> new RuntimeException("Unidad no encontrada"));
+
+        // 3. Actualizar campos
+        cobroExistente.setUnidad(unidad);
+        cobroExistente.setTarifaUnica(request.getTarifaUnica());
+        cobroExistente.setCuotaAsociacion(request.getCuotaAsociacion());
+        cobroExistente.setFondoEstrella(request.getFondoEstrella());
+        cobroExistente.setDias(request.getDias());
+        cobroExistente.setFechaTraslado(LocalDate.parse(request.getFechaTraslado()));
+
+        // 4. Guardar cambios
+        return cobrosRepository.save(cobroExistente);
+    }
+
+    public void eliminarCobro(Integer id) {
+        // Verificar existencia antes de eliminar
+        if (!cobrosRepository.existsById(id)) {
+            throw new RuntimeException("Cobro no encontrado");
+        }
+        cobrosRepository.deleteById(id);
+    }
+
 }

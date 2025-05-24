@@ -1,8 +1,11 @@
 package com.adavec.transporte.service;
 
 import com.adavec.transporte.dto.CrearSeguroRequest;
+import com.adavec.transporte.dto.SeguroDTO;
+import com.adavec.transporte.model.Distribuidor;
 import com.adavec.transporte.model.Seguro;
 import com.adavec.transporte.model.Unidad;
+import com.adavec.transporte.repository.DistribuidorRepository;
 import com.adavec.transporte.repository.SeguroRepository;
 import com.adavec.transporte.repository.UnidadRepository;
 import jakarta.transaction.Transactional;
@@ -16,9 +19,11 @@ public class SeguroService {
 
     private final SeguroRepository seguroRepository;
     private final UnidadRepository unidadRepository;
-    public SeguroService(SeguroRepository seguroRepository, UnidadRepository unidadRepository) {
+    private final DistribuidorRepository distribuidorRepository;
+    public SeguroService(SeguroRepository seguroRepository, UnidadRepository unidadRepository, DistribuidorRepository distribuidorRepository) {
         this.seguroRepository = seguroRepository;
         this.unidadRepository = unidadRepository;
+        this.distribuidorRepository = distribuidorRepository;
     }
     public List<Seguro> obtenerTodos() {
         return seguroRepository.findAll();
@@ -48,6 +53,31 @@ public class SeguroService {
 
         return seguroRepository.save(seguro);
     }
+    @Transactional
+    public Seguro actualizarSeguro(SeguroDTO seguroDTO) {
+        // 1. Validar existencia del seguro
+        Seguro seguro = seguroRepository.findById(seguroDTO.getId())
+                .orElseThrow(() -> new RuntimeException("Seguro no encontrado con ID: " + seguroDTO.getId()));
+
+        // 2. Obtener entidades relacionadas
+        Unidad unidad = unidadRepository.findById(seguroDTO.getUnidadId())
+                .orElseThrow(() -> new RuntimeException("Unidad no encontrada"));
+
+        Distribuidor distribuidora = distribuidorRepository.findById(seguroDTO.getDistribuidorId())
+                .orElseThrow(() -> new RuntimeException("Distribuidora no encontrada"));
+
+        // 3. Actualizar todos los campos
+        seguro.setFactura(seguroDTO.getFactura());
+        seguro.setValorSeguro(seguroDTO.getValorSeguro());
+        seguro.setCuotaSeguro(seguroDTO.getCuotaSeguro());
+        seguro.setSeguroDistribuidor(seguroDTO.getSeguroDistribuidor());
+        seguro.setFechaFactura(seguroDTO.getCuotaFactura());
+        seguro.setUnidad(unidad);
+        seguro.setDistribuidor(distribuidora); // Usamos el distribuidor del DTO
+
+        return seguroRepository.save(seguro);
+    }
+
     @Transactional
     public void eliminarPorFactura(String factura) {
         if (!seguroRepository.existsByFactura(factura)) {

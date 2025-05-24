@@ -30,4 +30,19 @@ public class CobrosController {
     public List<CobroDTO> listarPorUnidad(@PathVariable Integer unidadId) {
         return cobrosService.obtenerPorUnidad(unidadId);
     }
+    // Método para actualizar un cobro
+    @PutMapping("/{id}")
+    public ResponseEntity<?> actualizar(
+            @PathVariable Integer id,
+            @RequestBody CrearCobroRequest request) {
+        Cobros actualizado = cobrosService.actualizarCobro(id, request);
+        return ResponseEntity.ok("Cobro actualizado para la unidad: " + actualizado.getUnidad().getNoSerie());
+    }
+
+    // Método para eliminar un cobro
+    @DeleteMapping("/{id}")
+    public ResponseEntity<?> eliminar(@PathVariable Integer id) {
+        cobrosService.eliminarCobro(id);
+        return ResponseEntity.ok("Cobro con ID " + id + " eliminado exitosamente");
+    }
 }

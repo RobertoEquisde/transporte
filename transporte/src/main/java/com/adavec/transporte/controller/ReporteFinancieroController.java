@@ -7,7 +7,13 @@ import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.ss.util.CellRangeAddress;
 import org.apache.poi.xssf.usermodel.*;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+
+import java.util.HashMap;
+import java.util.Map;
 import java.util.stream.Collectors;
 import java.io.IOException;
 import java.time.YearMonth;
@@ -31,12 +37,25 @@ public class ReporteFinancieroController {
     ) throws IOException {
         response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
         response.setHeader("Content-Disposition", "attachment; filename=reporte_financiero_" + mes + ".xlsx");
-
+        // Validación adicional del mes
+        if (mes.isAfter(YearMonth.now().plusMonths(0))) {
+            throw new IllegalArgumentException("El mes no puede ser mayor a 12 meses en el futuro");
+        }
+        if (mes.isBefore(YearMonth.of(2000, 1))) {
+            throw new IllegalArgumentException("El mes no puede ser anterior al año 2000");
+        }
         List<ReporteFinancieroDTO> todasLasFilas = reporteFinancieroService.obtenerDatosFinancierosPorMes(mes);
         // Filtrar solo aquellos registros que tienen información en días y cuota asociación
         List<ReporteFinancieroDTO> filas = todasLasFilas.stream()
                 .filter(dto -> dto.getDias() > 0 && dto.getCuotaAsociacion() != null && dto.getCuotaAsociacion() > 0)
                 .collect(Collectors.toList());
+        // Verificar si hay datos
+        if (todasLasFilas.isEmpty()) {
+            response.setStatus(HttpServletResponse.SC_NO_CONTENT);
+            response.getWriter().write("No se encontraron datos para el mes " + mes.format(DateTimeFormatter.ofPattern("MMMM yyyy")));
+            return;
+        }
+
         XSSFWorkbook workbook = new XSSFWorkbook();
         Sheet sheet = workbook.createSheet("Reporte Financiero");
 
@@ -362,11 +381,89 @@ public class ReporteFinancieroController {
 
         // Agregar filtros en las columnas principales
         sheet.setAutoFilter(new CellRangeAddress(2, 2, 0, 13));
-
+        try {
+            workbook.write(response.getOutputStream());
+        } catch (IOException e) {
+            throw new RuntimeException("Error al generar el archivo Excel", e);
+        } finally {
+            try {
+                workbook.close();
+            } catch (IOException e) {
+                // Log el error pero no lo propagamos
+                e.printStackTrace();
+            }
+        }
         workbook.write(response.getOutputStream());
         workbook.close();
     }
+    /**
+     * Manejador de excepciones para errores de conversión de parámetros
+     */
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<Map<String, Object>> handleMethodArgumentTypeMismatch(
+            MethodArgumentTypeMismatchException ex) {
 
+        Map<String, Object> errorResponse = new HashMap<>();
+        errorResponse.put("timestamp", java.time.LocalDateTime.now());
+        errorResponse.put("status", HttpStatus.BAD_REQUEST.value());
+        errorResponse.put("error", "Bad Request");
+
+        if (ex.getName().equals("mes")) {
+            errorResponse.put("message", "Formato de mes inválido. El formato esperado es YYYY-MM (ejemplo: 2025-05)");
+            errorResponse.put("ejemplo", "2025-05");
+        } else {
+            errorResponse.put("message", "Parámetro inválido: " + ex.getName());
+        }
+
+        errorResponse.put("path", "/api/reportes/financiero");
+
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse);
+    }
+
+    /**
+     * Manejador de excepciones para argumentos ilegales
+     */
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<Map<String, Object>> handleIllegalArgument(IllegalArgumentException ex) {
+        Map<String, Object> errorResponse = new HashMap<>();
+        errorResponse.put("timestamp", java.time.LocalDateTime.now());
+        errorResponse.put("status", HttpStatus.BAD_REQUEST.value());
+        errorResponse.put("error", "Bad Request");
+        errorResponse.put("message", ex.getMessage());
+        errorResponse.put("path", "/api/reportes/financiero");
+
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse);
+    }
+
+    /**
+     * Manejador de excepciones para errores de E/S
+     */
+    @ExceptionHandler(IOException.class)
+    public ResponseEntity<Map<String, Object>> handleIOException(IOException ex) {
+        Map<String, Object> errorResponse = new HashMap<>();
+        errorResponse.put("timestamp", java.time.LocalDateTime.now());
+        errorResponse.put("status", HttpStatus.INTERNAL_SERVER_ERROR.value());
+        errorResponse.put("error", "Internal Server Error");
+        errorResponse.put("message", "Error al generar el archivo Excel");
+        errorResponse.put("path", "/api/reportes/financiero");
+
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse);
+    }
+
+    /**
+     * Manejador de excepciones genéricas
+     */
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<Map<String, Object>> handleGenericException(Exception ex) {
+        Map<String, Object> errorResponse = new HashMap<>();
+        errorResponse.put("timestamp", java.time.LocalDateTime.now());
+        errorResponse.put("status", HttpStatus.INTERNAL_SERVER_ERROR.value());
+        errorResponse.put("error", "Internal Server Error");
+        errorResponse.put("message", "Error inesperado en el servidor");
+        errorResponse.put("path", "/api/reportes/financiero");
+
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse);
+    }
     // Método auxiliar para obtener una fila existente o crear una nueva si no existe
     private Row getOrCreateRow(Sheet sheet, int rowNum) {
         Row row = sheet.getRow(rowNum);

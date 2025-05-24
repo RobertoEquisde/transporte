@@ -36,171 +36,69 @@ public class UnidadController {
         this.unidadService = unidadService;
         this.seguroRepository = seguroRepository;
     }
+    private UnidadDTO mapUnidadToUnidadDTO(Unidad unidad) {
+        UnidadDTO dto = new UnidadDTO();
+        dto.setId(unidad.getId());
+        dto.setNoSerie(unidad.getNoSerie());
+        dto.setComentario(unidad.getComentario());
+        dto.setOrigen(unidad.getOrigen());
+        dto.setDebisFecha(unidad.getDebisFecha() != null ? unidad.getDebisFecha().toString() : null);
+        dto.setPagoDistribuidora(unidad.getPagoDistribuidora() != null ? unidad.getPagoDistribuidora().toString() : null);
+        dto.setReportadoA(unidad.getReportadoA());
+        dto.setValorUnidad(unidad.getValorUnidad());
 
-    @GetMapping
-    public List<UnidadDTO> listar() {
-        return unidadService.obtenerTodas().stream().map(unidad -> {
-            UnidadDTO dto = new UnidadDTO();
-            dto.setId(unidad.getId());
-            dto.setNoSerie(unidad.getNoSerie());
-            dto.setComentario(unidad.getComentario());
-            dto.setOrigen(unidad.getOrigen());
-            dto.setDebisFecha(unidad.getDebisFecha() != null ? unidad.getDebisFecha().toString() : null);
-            dto.setPagoDistribuidora(unidad.getPagoDistribuidora() != null ? unidad.getPagoDistribuidora().toString() : null);
-            dto.setReportadoA(unidad.getReportadoA());
-            dto.setValorUnidad(unidad.getValorUnidad());
-
+        if (unidad.getModelo() != null) {
             ModeloDTO modeloDTO = new ModeloDTO();
             modeloDTO.setId(unidad.getModelo().getId());
             modeloDTO.setNombre(unidad.getModelo().getNombre());
             modeloDTO.setUso(unidad.getModelo().getUso());
             dto.setModelo(modeloDTO);
+        }
 
+        if (unidad.getDistribuidor() != null) {
             DistribuidoraInfoDTO distDTO = new DistribuidoraInfoDTO();
             distDTO.setId(unidad.getDistribuidor().getId());
             distDTO.setNombreDistribuidora(unidad.getDistribuidor().getNombreDistribuidora());
             distDTO.setClaveDistribuidora(unidad.getDistribuidor().getClaveDistribuidora());
             dto.setDistribuidor(distDTO);
-            Seguro seguro = seguroRepository.findByUnidadId(unidad.getId());
-            SeguroResumenDTO seguroDTO = new SeguroResumenDTO();
-            seguroDTO.setFactura(seguro != null ? seguro.getFactura() : null);
-            seguroDTO.setValorSeguro(seguro != null ? seguro.getValorSeguro() : 0.0);
-            seguroDTO.setSeguroDistribuidor(seguro != null && seguro.getSeguroDistribuidor() != null ? seguro.getSeguroDistribuidor() : 0.0);
-            dto.setSeguro(seguroDTO);
+        }
 
-            return dto;
-        }).collect(Collectors.toList());
+        Seguro seguro = seguroRepository.findByUnidadId(unidad.getId());
+        SeguroResumenDTO seguroDTO = new SeguroResumenDTO();
+        seguroDTO.setFactura(seguro != null ? seguro.getFactura() : null);
+        seguroDTO.setValorSeguro(seguro != null && seguro.getValorSeguro() != null ? seguro.getValorSeguro() : 0.0);
+        seguroDTO.setSeguroDistribuidor(seguro != null && seguro.getSeguroDistribuidor() != null ? seguro.getSeguroDistribuidor() : 0.0);
+        dto.setSeguro(seguroDTO);
+
+        return dto;
     }
-    @GetMapping("/buscar")
-    public UnidadDTO obtenerPorNumeroSerie(@RequestParam("serie") String serie) {
-        return unidadService.obtenerPorNoSerie(serie)
-                .map(unidad -> {
-                    UnidadDTO dto = new UnidadDTO();
-                    dto.setId(unidad.getId());
-                    dto.setNoSerie(unidad.getNoSerie());
-                    dto.setComentario(unidad.getComentario());
-                    dto.setOrigen(unidad.getOrigen());
-                    dto.setDebisFecha(unidad.getDebisFecha() != null ? unidad.getDebisFecha().toString() : null);
-                    dto.setPagoDistribuidora(unidad.getPagoDistribuidora() != null ? unidad.getPagoDistribuidora().toString() : null);
-                    dto.setReportadoA(unidad.getReportadoA());
-                    dto.setValorUnidad(unidad.getValorUnidad());
+    /*@GetMapping
+    public List<UnidadDTO> listar() {
+        return unidadService.obtenerTodas().stream()
+                .map(this::mapUnidadToUnidadDTO) // Use helper method
+                .collect(Collectors.toList());
+    }*/
 
-                    ModeloDTO modeloDTO = new ModeloDTO();
-                    modeloDTO.setId(unidad.getModelo().getId());
-                    modeloDTO.setNombre(unidad.getModelo().getNombre());
-                    modeloDTO.setUso(unidad.getModelo().getUso());
-                    dto.setModelo(modeloDTO);
-
-                    DistribuidoraInfoDTO distDTO = new DistribuidoraInfoDTO();
-                    distDTO.setId(unidad.getDistribuidor().getId());
-                    distDTO.setNombreDistribuidora(unidad.getDistribuidor().getNombreDistribuidora());
-                    distDTO.setClaveDistribuidora(unidad.getDistribuidor().getClaveDistribuidora());
-                    dto.setDistribuidor(distDTO);
-                    Seguro seguro = seguroRepository.findByUnidadId(unidad.getId());
-                    SeguroResumenDTO seguroDTO = new SeguroResumenDTO();
-                    seguroDTO.setFactura(seguro != null ? seguro.getFactura() : null);
-                    seguroDTO.setValorSeguro(seguro != null ? seguro.getValorSeguro() : 0.0);
-                    seguroDTO.setSeguroDistribuidor(seguro != null && seguro.getSeguroDistribuidor() != null ? seguro.getSeguroDistribuidor() : 0.0);
-                    dto.setSeguro(seguroDTO);
-                    return dto;
-                })
-                .orElseThrow(() -> new RuntimeException("Unidad no encontrada con número de serie: " + serie));
-    }
     @GetMapping("/buscar-por-digitos")
-    public List<UnidadDTO> buscarPorUltimosDigitos(@RequestParam("terminaEn") String ultimos6) {
-        List<Unidad> unidades = unidadService.buscarPorUltimosDigitosSerie(ultimos6);
+    public UnidadDTO buscarPorUltimosDigitos(@RequestParam("terminaEn") String terminaEn) {
+        if (terminaEn == null || terminaEn.trim().isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Debe proporcionar los caracteres a buscar");
+        }
+        terminaEn = terminaEn.trim();
+        if (terminaEn.length() < 6) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Debe proporcionar al menos 6 caracteres. Proporcionados: " + terminaEn.length());
+        }
+
+        List<Unidad> unidades = unidadService.buscarPorUltimosDigitosSerie(terminaEn);
 
         if (unidades.isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "No se encontraron unidades con esos dígitos");
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "No se encontró ninguna unidad que termine con: " + terminaEn);
         }
-
-        return unidades.stream()
-                .map(unidad -> {
-                    UnidadDTO dto = new UnidadDTO();
-                    dto.setId(unidad.getId());
-                    dto.setNoSerie(unidad.getNoSerie());
-                    dto.setComentario(unidad.getComentario());
-                    dto.setOrigen(unidad.getOrigen());
-                    dto.setDebisFecha(unidad.getDebisFecha() != null ? unidad.getDebisFecha().toString() : null);
-                    dto.setPagoDistribuidora(unidad.getPagoDistribuidora() != null ? unidad.getPagoDistribuidora().toString() : null);
-                    dto.setReportadoA(unidad.getReportadoA());
-                    dto.setValorUnidad(unidad.getValorUnidad());
-
-                    ModeloDTO modeloDTO = new ModeloDTO();
-                    modeloDTO.setId(unidad.getModelo().getId());
-                    modeloDTO.setNombre(unidad.getModelo().getNombre());
-                    modeloDTO.setUso(unidad.getModelo().getUso());
-                    dto.setModelo(modeloDTO);
-
-                    DistribuidoraInfoDTO distDTO = new DistribuidoraInfoDTO();
-                    distDTO.setId(unidad.getDistribuidor().getId());
-                    distDTO.setNombreDistribuidora(unidad.getDistribuidor().getNombreDistribuidora());
-                    distDTO.setClaveDistribuidora(unidad.getDistribuidor().getClaveDistribuidora());
-                    dto.setDistribuidor(distDTO);
-
-                    Seguro seguro = seguroRepository.findByUnidadId(unidad.getId());
-                    SeguroResumenDTO seguroDTO = new SeguroResumenDTO();
-                    seguroDTO.setFactura(seguro != null ? seguro.getFactura() : null);
-                    seguroDTO.setValorSeguro(seguro != null && seguro.getValorSeguro() != null ? seguro.getValorSeguro() : 0.0);
-                    seguroDTO.setSeguroDistribuidor(seguro != null && seguro.getSeguroDistribuidor() != null ? seguro.getSeguroDistribuidor() : 0.0);
-                    dto.setSeguro(seguroDTO);
-
-                    return dto;
-                })
-                .collect(Collectors.toList());
-    }
-
-    @GetMapping("/reportes/")
-    public void exportExcelPorMesDistribuidora(
-            @RequestParam("mes") @DateTimeFormat(pattern = "yyyy-MM") YearMonth mes,
-            HttpServletResponse response
-    ) throws IOException {
-        response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-        response.setHeader("Content-Disposition", "attachment; filename=unidades_" + mes + ".xlsx");
-
-        List<UnidadReporteDTO> datos = unidadService.obtenerDatosPorMes(mes);
-
-        Map<String, List<UnidadReporteDTO>> agrupadoPorDistribuidora = datos.stream()
-                .collect(Collectors.groupingBy(UnidadReporteDTO::getDistribuidora));
-
-        Workbook workbook = new XSSFWorkbook();
-        Sheet sheet = workbook.createSheet("Unidades");
-
-        int rowIdx = 0;
-        String[] columnas = {"Clave", "Factura", "Modelo", "Serie", "VIN", "Fecha Fondeo", "Tipo", "Valor Unidad", "Seguro GNP"};
-
-        for (Map.Entry<String, List<UnidadReporteDTO>> entry : agrupadoPorDistribuidora.entrySet()) {
-            String distribuidora = entry.getKey();
-            List<UnidadReporteDTO> unidades = entry.getValue();
-
-            Row titulo = sheet.createRow(rowIdx++);
-            titulo.createCell(0).setCellValue("Distribuidora: " + distribuidora);
-
-            Row encabezado = sheet.createRow(rowIdx++);
-            for (int i = 0; i < columnas.length; i++) {
-                encabezado.createCell(i).setCellValue(columnas[i]);
-            }
-
-            for (UnidadReporteDTO u : unidades) {
-                Row row = sheet.createRow(rowIdx++);
-                row.createCell(0).setCellValue(u.getClave());
-                row.createCell(1).setCellValue(u.getFactura());
-                row.createCell(2).setCellValue(u.getModelo());
-                row.createCell(3).setCellValue(u.getSerie());
-                row.createCell(4).setCellValue(u.getVin());
-                row.createCell(5).setCellValue(u.getFechaFondeo());
-                row.createCell(6).setCellValue(u.getTipo());
-                row.createCell(7).setCellValue(u.getValorUnidad());
-                row.createCell(8).setCellValue(u.getValorSeguro());
-
-            }
-
-            // Espacio entre grupos
-            rowIdx++;
+        if (unidades.size() > 1) {
+            String seriesEncontradas = unidades.stream().map(Unidad::getNoSerie).collect(Collectors.joining(", "));
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Se encontraron " + unidades.size() + " unidades que terminan con '" + terminaEn + "'. Series completas: " + seriesEncontradas);
         }
-
-        workbook.write(response.getOutputStream());
-        workbook.close();
+        return mapUnidadToUnidadDTO(unidades.get(0)); // Use helper method
     }
 
 //post
@@ -226,7 +124,6 @@ public class UnidadController {
 
         Unidad unidadGuardada = unidadService.guardar(unidad);
 
-        // Puedes usar tu método mapUnidadToDTO aquí si ya lo tienes, o replicar el DTO como antes
         UnidadDTO dto = new UnidadDTO();
         dto.setId(unidadGuardada.getId());
         dto.setNoSerie(unidadGuardada.getNoSerie());
@@ -246,6 +143,11 @@ public class UnidadController {
         dto.setDistribuidor(distDTO);
 
         return new ResponseEntity<>(dto, HttpStatus.CREATED);
+    }
+    @PutMapping("/{id}")
+    public ResponseEntity<UnidadDTO> actualizarUnidad(@PathVariable Integer id, @RequestBody UnidadDTO request) {
+        Unidad unidadActualizada = unidadService.actualizarUnidad(id, request);
+        return ResponseEntity.ok(mapUnidadToUnidadDTO(unidadActualizada));
     }
     //delete
     @DeleteMapping("/eliminar")

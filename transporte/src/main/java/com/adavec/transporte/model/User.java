@@ -44,7 +44,7 @@ public class User {
 
     @Column(nullable = false)
     @Enumerated(EnumType.STRING)
-    private Role role = Role.USER;
+    private Role role = Role.ROLE_USER;
 
     @Column(name = "is_active")
     private boolean isActive = true;
@@ -67,6 +67,6 @@ public class User {
     }
 
     public enum Role {
-        USER, ADMIN, MODERATOR
+        ROLE_USER, ROLE_ADMIN, ROLE_MODERATOR
     }
 }

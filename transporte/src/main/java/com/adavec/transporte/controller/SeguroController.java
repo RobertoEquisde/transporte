@@ -22,19 +22,25 @@ public class SeguroController {
         this.seguroService = seguroService;
     }
 
-    @GetMapping
-    public List<SeguroDTO> listar() {
-        return seguroService.obtenerTodos().stream().map(seguro -> {
-            SeguroDTO dto = new SeguroDTO();
-            dto.setId(seguro.getId());
-            dto.setFactura(seguro.getFactura());
-            dto.setValorSeguro(seguro.getValorSeguro());
-            dto.setSeguroDistribuidor(seguro.getSeguroDistribuidor());
-            dto.setUnidadId(seguro.getUnidad().getId());
-            dto.setDistribuidorId(seguro.getDistribuidor().getId());
-            return dto;
-        }).collect(Collectors.toList());
+    // Método helper para convertir Entidad a DTO
+    private SeguroDTO convertToDTO(Seguro seguro) {
+        SeguroDTO dto = new SeguroDTO();
+        dto.setId(seguro.getId());
+        dto.setFactura(seguro.getFactura());
+        dto.setValorSeguro(seguro.getValorSeguro());
+        dto.setSeguroDistribuidor(seguro.getSeguroDistribuidor());
+        dto.setUnidadId(seguro.getUnidad().getId());
+        dto.setDistribuidorId(seguro.getDistribuidor().getId());
+        return dto;
     }
+
+    /*@GetMapping
+    public List<SeguroDTO> listar() {
+        return seguroService.obtenerTodos().stream()
+                .map(this::convertToDTO)
+                .collect(Collectors.toList());
+    }*/
+
     @GetMapping("/buscar")
     public List<SeguroDTO> buscarPorFactura(@RequestParam("factura") String factura) {
         List<Seguro> seguros = seguroService.buscarPorFactura(factura);
@@ -43,37 +49,37 @@ public class SeguroController {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "No se encontraron seguros con esa factura");
         }
 
-        return seguros.stream().map(seguro -> {
-            SeguroDTO dto = new SeguroDTO();
-            dto.setId(seguro.getId());
-            dto.setFactura(seguro.getFactura());
-            dto.setValorSeguro(seguro.getValorSeguro());
-            dto.setSeguroDistribuidor(seguro.getSeguroDistribuidor());
-            dto.setUnidadId(seguro.getUnidad().getId());
-            dto.setDistribuidorId(seguro.getDistribuidor().getId());
-            return dto;
-        }).collect(Collectors.toList());
+        return seguros.stream()
+                .map(this::convertToDTO)
+                .collect(Collectors.toList());
     }
-// post
+
     @PostMapping
     public ResponseEntity<SeguroDTO> crearSeguro(@RequestBody CrearSeguroRequest request) {
         Seguro seguro = seguroService.guardarSeguroDesdeDTO(request);
-
-        SeguroDTO dto = new SeguroDTO();
-        dto.setId(seguro.getId());
-        dto.setFactura(seguro.getFactura());
-        dto.setValorSeguro(seguro.getValorSeguro());
-        dto.setSeguroDistribuidor(seguro.getSeguroDistribuidor());
-        dto.setUnidadId(seguro.getUnidad().getId());
-        dto.setDistribuidorId(seguro.getDistribuidor().getId());
-
-        return new ResponseEntity<>(dto, HttpStatus.CREATED);
+        return new ResponseEntity<>(convertToDTO(seguro), HttpStatus.CREATED);
     }
-    //delete
+
+    // Nuevo método para actualizar
+    @PutMapping("/{id}")
+    public ResponseEntity<SeguroDTO> actualizarSeguro(
+            @PathVariable Integer id,
+            @RequestBody SeguroDTO seguroDTO) {
+
+        if (!id.equals(seguroDTO.getId())) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "ID en URL no coincide con ID en el cuerpo de la solicitud"
+            );
+        }
+
+        Seguro seguroActualizado = seguroService.actualizarSeguro(seguroDTO);
+        return ResponseEntity.ok(convertToDTO(seguroActualizado));
+    }
+
     @DeleteMapping("/factura/{factura}")
-    public String eliminarPorFactura(@PathVariable String factura) {
+    public ResponseEntity<String> eliminarPorFactura(@PathVariable String factura) {
         seguroService.eliminarPorFactura(factura);
-        return "Seguro eliminado correctamente con factura: " + factura;
+        return ResponseEntity.ok("Seguro eliminado correctamente con factura: " + factura);
     }
-
 }

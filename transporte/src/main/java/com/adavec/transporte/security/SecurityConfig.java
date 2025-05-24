@@ -4,6 +4,7 @@ import com.adavec.transporte.service.CustomUserDetailsService;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
@@ -39,14 +40,44 @@ public class SecurityConfig {
                 .and()
                 .csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(auth -> auth
+                        // Públicos
                         .requestMatchers(
-                                "/api/auth/**", // login, register, etc.
+                                "/api/auth/**",
                                 "/swagger-ui/**",
-                                "/swagger-ui.html",
                                 "/v3/api-docs/**",
-                                "/h2-console/**" // Si usas H2 para testing
+                                "/h2-console/**"
                         ).permitAll()
-                        .requestMatchers("/api/admin/**").hasRole("ADMIN")
+
+                        // Unidades
+                        .requestMatchers(HttpMethod.GET, "/api/unidades/**").authenticated()
+                        .requestMatchers(HttpMethod.PUT, "/api/unidades/**").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.POST, "/api/unidades").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.DELETE, "/api/unidades/**").hasRole("ADMIN")
+
+                        // Seguros
+                        .requestMatchers(HttpMethod.GET, "/api/seguros/**").authenticated()
+                        .requestMatchers(HttpMethod.POST, "/api/seguros").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.DELETE, "/api/seguros/**").hasRole("ADMIN")
+
+                        // Modelos
+                        .requestMatchers(HttpMethod.GET, "/api/modelos").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/modelos").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.DELETE, "/api/modelos/**").hasRole("ADMIN")
+
+                        // Distribuidores
+                        .requestMatchers(HttpMethod.GET, "/api/distribuidores").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/distribuidores").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.DELETE, "/api/distribuidores/**").hasRole("ADMIN")
+
+                        // Cobros
+                        .requestMatchers(HttpMethod.GET, "/api/cobros/**").authenticated()
+                        .requestMatchers(HttpMethod.POST, "/api/cobros").hasRole("ADMIN")
+
+                        // Importación/Reportes
+                        .requestMatchers(HttpMethod.POST, "/api/importar/**").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.GET, "/api/reportes/**").hasRole("ADMIN")
+
+                        // Cualquier otra ruta
                         .anyRequest().authenticated()
                 )
                 .sessionManagement(sess -> sess.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
@@ -56,10 +87,9 @@ public class SecurityConfig {
                         .authenticationEntryPoint((request, response, authException) -> {
                             response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
                             response.setContentType("application/json");
-                            response.getWriter().write("{\"error\":\"No autorizado\",\"message\":\"" + authException.getMessage() + "\"}");
+                            response.getWriter().write("{\"error\":\"Acceso no autorizado\"}");
                         })
                 );
-
         // Para H2 Console (solo en desarrollo)
         http.headers().frameOptions().disable();
 
@@ -99,4 +129,5 @@ public class SecurityConfig {
     public AuthenticationManager authenticationManager(AuthenticationConfiguration config) throws Exception {
         return config.getAuthenticationManager();
     }
+
 }

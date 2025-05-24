@@ -44,9 +44,9 @@ public class UserService {
 
         // Asignar rol (por defecto USER, o ADMIN si es el primer usuario)
         if (userRepository.count() == 0) {
-            user.setRole(User.Role.ADMIN); // Primer usuario es admin
+            user.setRole(User.Role.ROLE_ADMIN); // Primer usuario es admin
         } else {
-            user.setRole(User.Role.USER);
+            user.setRole(User.Role.ROLE_USER);
         }
 
         User savedUser = userRepository.save(user);

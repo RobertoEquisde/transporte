@@ -1,5 +1,6 @@
 package com.adavec.transporte.service;
 
+import com.adavec.transporte.dto.UnidadDTO;
 import com.adavec.transporte.dto.UnidadReporteDTO;
 import com.adavec.transporte.model.Distribuidor;
 import com.adavec.transporte.model.Modelo;
@@ -18,6 +19,9 @@ public interface UnidadService {
     List<Unidad> buscarPorUltimosDigitosSerie(String ultimos6);
     void eliminarPorNoSerie(String noSerie);
     Modelo buscarOCrearModeloPorNombre(String nombre);
+
+    // Updated method signature for updating Unidad using UnidadDTO as request
+    Unidad actualizarUnidad(Integer id, UnidadDTO requestDTO);
 
     Distribuidor buscarDistribuidorPorClave(String clave);
 
