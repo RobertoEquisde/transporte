@@ -65,6 +65,7 @@ public class UnidadController {
 
         Seguro seguro = seguroRepository.findByUnidadId(unidad.getId());
         SeguroResumenDTO seguroDTO = new SeguroResumenDTO();
+        seguroDTO.setId(seguro != null ? seguro.getId() : null);
         seguroDTO.setFactura(seguro != null ? seguro.getFactura() : null);
         seguroDTO.setValorSeguro(seguro != null && seguro.getValorSeguro() != null ? seguro.getValorSeguro() : 0.0);
         seguroDTO.setSeguroDistribuidor(seguro != null && seguro.getSeguroDistribuidor() != null ? seguro.getSeguroDistribuidor() : 0.0);
