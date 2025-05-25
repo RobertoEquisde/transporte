@@ -6,6 +6,7 @@ import com.adavec.transporte.model.Modelo;
 import com.adavec.transporte.model.Seguro;
 import com.adavec.transporte.model.Unidad;
 import com.adavec.transporte.repository.SeguroRepository;
+import com.adavec.transporte.service.SeguroService;
 import com.adavec.transporte.service.UnidadService;
 import jakarta.servlet.http.HttpServletResponse;
 import org.apache.poi.ss.usermodel.Row;
@@ -32,9 +33,12 @@ public class UnidadController {
 
     private final UnidadService unidadService;
     private final SeguroRepository seguroRepository;
-    public UnidadController(UnidadService unidadService, SeguroRepository seguroRepository) {
+    private final SeguroService seguroService;
+
+    public UnidadController(UnidadService unidadService, SeguroRepository seguroRepository, SeguroService seguroService) {
         this.unidadService = unidadService;
         this.seguroRepository = seguroRepository;
+        this.seguroService = seguroService;
     }
     private UnidadDTO mapUnidadToUnidadDTO(Unidad unidad) {
         UnidadDTO dto = new UnidadDTO();
@@ -103,6 +107,59 @@ public class UnidadController {
     }
 
 //post
+@PostMapping("/con-seguro")
+public ResponseEntity<UnidadDTO> crearUnidadConSeguro(@RequestBody CrearUnidadConSeguroRequest request) {
+    // 1. Crear la unidad
+    Unidad unidad = new Unidad();
+    unidad.setNoSerie(request.getNoSerie());
+    unidad.setComentario(request.getComentario());
+    unidad.setOrigen(request.getOrigen());
+    unidad.setDebisFecha(request.getDebisFecha() != null ? LocalDate.parse(request.getDebisFecha()) : null);
+    unidad.setReportadoA(request.getReportadoA());
+    unidad.setPagoDistribuidora(request.getPagoDistribuidora() != null ? LocalDate.parse(request.getPagoDistribuidora()) : null);
+    unidad.setValorUnidad(request.getValorUnidad());
+
+    Modelo modelo = new Modelo();
+    modelo.setId(request.getModeloId());
+    unidad.setModelo(modelo);
+
+    Distribuidor distribuidor = new Distribuidor();
+    distribuidor.setId(request.getDistribuidorId());
+    unidad.setDistribuidor(distribuidor);
+
+    Unidad unidadGuardada = unidadService.guardar(unidad);
+
+    // 2. Crear el seguro automáticamente
+    CrearSeguroRequest seguroRequest = request.getSeguro();
+    seguroRequest.setUnidadId(unidadGuardada.getId());
+    Seguro seguroCreado = seguroService.guardarSeguroDesdeDTO(seguroRequest);
+    // 3. Armar respuesta completa
+    UnidadDTO dto = new UnidadDTO();
+    dto.setId(unidadGuardada.getId());
+    dto.setNoSerie(unidadGuardada.getNoSerie());
+    dto.setComentario(unidadGuardada.getComentario());
+    dto.setOrigen(unidadGuardada.getOrigen());
+    dto.setDebisFecha(unidadGuardada.getDebisFecha() != null ? unidadGuardada.getDebisFecha().toString() : null);
+    dto.setPagoDistribuidora(unidadGuardada.getPagoDistribuidora() != null ? unidadGuardada.getPagoDistribuidora().toString() : null);
+    dto.setReportadoA(unidadGuardada.getReportadoA());
+    dto.setValorUnidad(unidadGuardada.getValorUnidad());
+
+    ModeloDTO modeloDTO = new ModeloDTO();
+    modeloDTO.setId(request.getModeloId());
+    dto.setModelo(modeloDTO);
+
+    DistribuidoraInfoDTO distDTO = new DistribuidoraInfoDTO();
+    distDTO.setId(request.getDistribuidorId());
+    dto.setDistribuidor(distDTO);
+
+    SeguroResumenDTO seguroResumen = new SeguroResumenDTO();
+    seguroResumen.setId(seguroCreado.getId());
+    seguroResumen.setFactura(seguroCreado.getFactura());
+    seguroResumen.setValorSeguro(seguroCreado.getValorSeguro());
+    seguroResumen.setSeguroDistribuidor(seguroCreado.getSeguroDistribuidor());
+    dto.setSeguro(seguroResumen);
+    return new ResponseEntity<>(dto, HttpStatus.CREATED);
+}
     @PostMapping
     public ResponseEntity<UnidadDTO> crearUnidad(@RequestBody CrearUnidadRequest request) {
         Unidad unidad = new Unidad();

@@ -51,7 +51,7 @@ public class SecurityConfig {
                         // Unidades
                         .requestMatchers(HttpMethod.GET, "/api/unidades/**").authenticated()
                         .requestMatchers(HttpMethod.PUT, "/api/unidades/**").hasRole("ADMIN")
-                        .requestMatchers(HttpMethod.POST, "/api/unidades").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.POST, "/api/unidades").authenticated()
                         .requestMatchers(HttpMethod.DELETE, "/api/unidades/**").hasRole("ADMIN")
 
                         // Seguros
