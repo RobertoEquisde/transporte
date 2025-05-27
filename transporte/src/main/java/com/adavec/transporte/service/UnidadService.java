@@ -26,4 +26,5 @@ public interface UnidadService {
     Distribuidor buscarDistribuidorPorClave(String clave);
 
 
+    boolean existePorNoSerie(String trim);
 }

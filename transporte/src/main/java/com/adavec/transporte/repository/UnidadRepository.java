@@ -15,4 +15,5 @@ public interface UnidadRepository extends JpaRepository<Unidad, Integer> {
     void deleteByNoSerie(String noSerie);
 
 
+    boolean existsByNoSerie(String noSerie);
 }

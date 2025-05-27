@@ -52,7 +52,10 @@ public class UnidadServiceImpl implements UnidadService {
         return unidadRepository.save(unidad);
     }
 
-
+    @Override
+    public boolean existePorNoSerie(String noSerie) {
+        return unidadRepository.existsByNoSerie(noSerie);
+    }
     @Override
     public List<UnidadReporteDTO> obtenerDatosPorMes(YearMonth mes) {
         LocalDate inicio = mes.atDay(1);

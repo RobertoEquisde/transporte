@@ -18,6 +18,12 @@ public class ModeloService {
         this.modeloRepository = modeloRepository;
     }
 
+
+    public boolean existePorId(Integer id) {
+        return modeloRepository.existsById(id);
+    }
+
+
     public List<Modelo> obtenerTodos() {
         return modeloRepository.findAll();
     }

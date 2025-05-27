@@ -68,6 +68,7 @@ public class TxtImportController {
             AtomicInteger distribuidoresCreados = new AtomicInteger(0);
             AtomicInteger errores = new AtomicInteger(0);
             List<String> erroresLog = new ArrayList<>();
+            List<String> duplicados = new ArrayList<>(); // Nueva lista para duplicados
 
             // Dividir en lotes más pequeños para procesar
             List<List<String>> lotes = dividirEnLotes(lineas, BATCH_SIZE);
@@ -91,6 +92,13 @@ public class TxtImportController {
                         List<String> lotesErrores = (List<String>) resultadoLote.get("erroresLog");
                         erroresLog.addAll(lotesErrores);
                     }
+
+                    // Agregar duplicados encontrados en este lote
+                    if (resultadoLote.containsKey("duplicados")) {
+                        @SuppressWarnings("unchecked")
+                        List<String> lotesDuplicados = (List<String>) resultadoLote.get("duplicados");
+                        duplicados.addAll(lotesDuplicados);
+                    }
                 } catch (Exception e) {
                     errores.incrementAndGet();
                     String mensajeError = "Error al procesar lote " + (i+1) + ": " + e.getMessage();
@@ -101,7 +109,6 @@ public class TxtImportController {
             }
 
             // Construir respuesta con resultados
-            resultado.put("mensaje", "Importación completada.");
             resultado.put("unidadesImportadas", importados.get());
             resultado.put("unidadesOmitidas", omitidos.get());
             resultado.put("distribuidoresCreados", distribuidoresCreados.get());
@@ -112,6 +119,30 @@ public class TxtImportController {
                 resultado.put("erroresLog", erroresLog);
             }
 
+            // Verificar si hay duplicados y manejar como error
+            if (!duplicados.isEmpty()) {
+                // Mostrar duplicados en consola
+                System.err.println("==========================================");
+                System.err.println("⚠️  UNIDADES DUPLICADAS ENCONTRADAS ⚠️");
+                System.err.println("==========================================");
+                for (String duplicado : duplicados) {
+                    System.err.println("🔄 " + duplicado);
+                }
+                System.err.println("==========================================");
+                System.err.println("Total de duplicados: " + duplicados.size());
+                System.err.println("==========================================");
+
+                // Retornar error con información de duplicados
+                resultado.put("mensaje", "Importación fallida: Se encontraron unidades duplicadas");
+                resultado.put("duplicadosEncontrados", duplicados.size());
+                resultado.put("duplicados", duplicados);
+
+                return ResponseEntity.status(HttpStatus.CONFLICT)
+                        .body(resultado);
+            }
+
+            // Si no hay duplicados, retornar éxito
+            resultado.put("mensaje", "Importación completada exitosamente.");
             return ResponseEntity.ok(resultado);
 
         } catch (Exception e) {
@@ -146,6 +177,7 @@ public class TxtImportController {
         int omitidos = 0;
         int distribuidoresCreados = 0;
         List<String> erroresLog = new ArrayList<>();
+        List<String> duplicados = new ArrayList<>(); // Nueva lista para duplicados del lote
 
         for (String linea : lineas) {
             try {
@@ -199,11 +231,12 @@ public class TxtImportController {
                 // Verificar existencia de unidad primero para evitar trabajo innecesario
                 Optional<Unidad> existente = unidadService.obtenerPorNoSerie(noSerie);
                 if (existente.isPresent()) {
-                    String mensajeError = "⚠️ Unidad duplicada con noSerie: " + noSerie;
-                    System.out.println(mensajeError);
-                    erroresLog.add(mensajeError);
+                    String mensajeDuplicado = "Número de serie: " + noSerie +
+                            " | Distribuidor: " + claveDistribuidora +
+                            " | Modelo: " + modeloNombre;
+                    duplicados.add(mensajeDuplicado);
                     omitidos++;
-                    continue;
+                    continue; // Continúa para recopilar todos los duplicados
                 }
 
                 // Procesar modelo y distribuidor con reintentos
@@ -254,6 +287,7 @@ public class TxtImportController {
         resultado.put("omitidos", omitidos);
         resultado.put("distribuidoresCreados", distribuidoresCreados);
         resultado.put("erroresLog", erroresLog);
+        resultado.put("duplicados", duplicados); // Agregar duplicados al resultado
 
         return resultado;
     }

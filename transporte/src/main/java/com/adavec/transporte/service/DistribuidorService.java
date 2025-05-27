@@ -17,6 +17,10 @@ public class DistribuidorService {
     public DistribuidorService(DistribuidorRepository distribuidorRepository) {
         this.distribuidorRepository = distribuidorRepository;
     }
+
+    public boolean existePorId(Integer id) {
+        return distribuidorRepository.existsById(id);
+    }
     public Optional<Distribuidor> buscarPorClaveExacta(String claveDistribuidora) {
         return distribuidorRepository.findByClaveDistribuidora(claveDistribuidora);
     }
