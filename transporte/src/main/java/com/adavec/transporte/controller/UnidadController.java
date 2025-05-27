@@ -120,9 +120,9 @@ public ResponseEntity<UnidadDTO> crearUnidadConSeguro(@RequestBody CrearUnidadCo
     unidad.setNoSerie(request.getNoSerie());
     unidad.setComentario(request.getComentario());
     unidad.setOrigen(request.getOrigen());
-    unidad.setDebisFecha(request.getDebisFecha() != null ? LocalDate.parse(request.getDebisFecha()) : null);
+    unidad.setDebisFecha(parseOptionalDate(request.getDebisFecha()));
     unidad.setReportadoA(request.getReportadoA());
-    unidad.setPagoDistribuidora(request.getPagoDistribuidora() != null ? LocalDate.parse(request.getPagoDistribuidora()) : null);
+    unidad.setPagoDistribuidora(parseOptionalDate(request.getPagoDistribuidora()));
     unidad.setValorUnidad(request.getValorUnidad());
 
     Modelo modelo = new Modelo();
