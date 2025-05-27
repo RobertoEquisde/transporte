@@ -40,6 +40,12 @@ public class UnidadController {
         this.seguroRepository = seguroRepository;
         this.seguroService = seguroService;
     }
+
+    private LocalDate parseOptionalDate(String dateString) {
+        return (dateString == null || dateString.trim().isEmpty())
+                ? null
+                : LocalDate.parse(dateString);
+    }
     private UnidadDTO mapUnidadToUnidadDTO(Unidad unidad) {
         UnidadDTO dto = new UnidadDTO();
         dto.setId(unidad.getId());
@@ -167,9 +173,9 @@ public ResponseEntity<UnidadDTO> crearUnidadConSeguro(@RequestBody CrearUnidadCo
         unidad.setNoSerie(request.getNoSerie());
         unidad.setComentario(request.getComentario());
         unidad.setOrigen(request.getOrigen());
-        unidad.setDebisFecha(request.getDebisFecha() != null ? LocalDate.parse(request.getDebisFecha()) : null);
+        unidad.setDebisFecha(parseOptionalDate(request.getDebisFecha()));
         unidad.setReportadoA(request.getReportadoA());
-        unidad.setPagoDistribuidora(request.getPagoDistribuidora() != null ? LocalDate.parse(request.getPagoDistribuidora()) : null);
+        unidad.setPagoDistribuidora(parseOptionalDate(request.getPagoDistribuidora()));
         unidad.setValorUnidad(request.getValorUnidad());
 
         Modelo modelo = new Modelo();
