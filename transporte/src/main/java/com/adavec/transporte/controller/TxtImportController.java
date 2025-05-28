@@ -108,7 +108,7 @@ public class TxtImportController {
             Map<String, Object> map = new HashMap<>();
             map.put("numeroLinea", numeroLinea);
             map.put("tipoError", tipoError.getDescripcion());
-            map.put("mensaje", mensaje);
+            map.put("message", mensaje);
             map.put("lineaOriginal", lineaOriginal);
             if (campo != null) map.put("campo", campo);
             if (valor != null) map.put("valor", valor);
@@ -250,7 +250,7 @@ public class TxtImportController {
                         .map(ErrorDetallado::toMap)
                         .toList();
 
-                resultado.put("mensaje", "Importación rechazada: Se detectaron unidades duplicadas que ya existen en el sistema");
+                resultado.put("message", "Importación rechazada: Se detectaron unidades duplicadas que ya existen en el sistema");
                 resultado.put("tipoError", "CONFLICTO_DUPLICADOS");
                 resultado.put("duplicados", duplicadosDetallados);
                 resultado.put("cantidadDuplicados", erroresDuplicados.size());
@@ -278,7 +278,7 @@ public class TxtImportController {
                         .map(ErrorDetallado::toMap)
                         .toList();
 
-                resultado.put("mensaje", "Importación rechazada: Los datos contienen errores de validación que deben corregirse");
+                resultado.put("message", "Importación rechazada: Los datos contienen errores de validación que deben corregirse");
                 resultado.put("tipoError", "ERROR_VALIDACION");
                 resultado.put("erroresValidacion", validacionDetallada);
                 resultado.put("cantidadErroresValidacion", erroresValidacion.size());
@@ -305,7 +305,7 @@ public class TxtImportController {
                         .map(ErrorDetallado::toMap)
                         .toList();
 
-                resultado.put("mensaje", "Importación fallida: Se produjeron errores internos del sistema");
+                resultado.put("message", "Importación fallida: Se produjeron errores internos del sistema");
                 resultado.put("tipoError", "ERROR_SISTEMA");
                 resultado.put("erroresSistema", sistemaDetallado);
                 resultado.put("cantidadErroresSistema", erroresSistema.size());
@@ -324,9 +324,9 @@ public class TxtImportController {
                         .map(ErrorDetallado::toMap)
                         .toList();
                 resultado.put("advertencias", erroresDetallados);
-                resultado.put("mensaje", "Importación completada con advertencias");
+                resultado.put("message", "Importación completada con advertencias");
             } else {
-                resultado.put("mensaje", "Importación completada exitosamente");
+                resultado.put("message", "Importación completada exitosamente");
             }
 
             return ResponseEntity.ok(resultado);
@@ -336,7 +336,7 @@ public class TxtImportController {
             e.printStackTrace();
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(Map.of(
-                            "mensaje", "Error crítico durante la importación",
+                            "message", "Error crítico durante la importación",
                             "tipoError", "ERROR_SISTEMA",
                             "error", e.getMessage()
                     ));
