@@ -30,25 +30,44 @@ public class ReporteFinancieroController {
         this.reporteFinancieroService = reporteFinancieroService;
     }
 
+    // Enum para los tipos de reporte
+    public enum TipoReporte {
+        SEGUROS_COMPLETOS("Seguros Completos"),
+        CUOTA_ASOCIACION("Cuota Asociación"),
+        CUOTA_SEGURO("Cuota Seguro"),
+        SEGURO("Seguro"),
+        IMPORTE_TRASLADO("Importe Traslado"),
+        FONDO_ESTRELLA("Fondo Estrella");
+
+        private final String descripcion;
+
+        TipoReporte(String descripcion) {
+            this.descripcion = descripcion;
+        }
+
+        public String getDescripcion() {
+            return descripcion;
+        }
+    }
+
     @GetMapping("/financiero")
     public void exportarReporteFinanciero(
             @RequestParam("mes") @DateTimeFormat(pattern = "yyyy-MM") YearMonth mes,
+            @RequestParam(value = "tipo", defaultValue = "SEGUROS_COMPLETOS") TipoReporte tipoReporte,
             HttpServletResponse response
     ) throws IOException {
-        response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-        response.setHeader("Content-Disposition", "attachment; filename=reporte_financiero_" + mes + ".xlsx");
-        // Validación adicional del mes
-        if (mes.isAfter(YearMonth.now().plusMonths(0))) {
-            throw new IllegalArgumentException("El mes no puede ser mayor a 12 meses en el futuro");
-        }
-        if (mes.isBefore(YearMonth.of(2000, 1))) {
-            throw new IllegalArgumentException("El mes no puede ser anterior al año 2000");
-        }
+
+        // Validación del mes
+        validarMes(mes);
+
+        // Obtener datos
         List<ReporteFinancieroDTO> todasLasFilas = reporteFinancieroService.obtenerDatosFinancierosPorMes(mes);
+
         // Filtrar solo aquellos registros que tienen información en días y cuota asociación
         List<ReporteFinancieroDTO> filas = todasLasFilas.stream()
                 .filter(dto -> dto.getDias() > 0 && dto.getCuotaAsociacion() != null && dto.getCuotaAsociacion() > 0)
                 .collect(Collectors.toList());
+
         // Verificar si hay datos
         if (todasLasFilas.isEmpty()) {
             response.setStatus(HttpServletResponse.SC_NO_CONTENT);
@@ -56,6 +75,192 @@ public class ReporteFinancieroController {
             return;
         }
 
+        // Configurar respuesta
+        String nombreArchivo = String.format("reporte_%s_%s.xlsx",
+                tipoReporte.name().toLowerCase(), mes);
+        response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        response.setHeader("Content-Disposition", "attachment; filename=" + nombreArchivo);
+
+        // Generar el reporte según el tipo
+        switch (tipoReporte) {
+            case SEGUROS_COMPLETOS:
+                generarReporteCompleto(filas, mes, response);
+                break;
+            case CUOTA_ASOCIACION:
+                generarReporteEspecifico(filas, mes, response, tipoReporte);
+                break;
+            case CUOTA_SEGURO:
+                generarReporteEspecifico(filas, mes, response, tipoReporte);
+                break;
+            case SEGURO:
+                generarReporteEspecifico(filas, mes, response, tipoReporte);
+                break;
+            case IMPORTE_TRASLADO:
+                generarReporteEspecifico(filas, mes, response, tipoReporte);
+                break;
+            case FONDO_ESTRELLA:
+                generarReporteEspecifico(filas, mes, response, tipoReporte);
+                break;
+            default:
+                throw new IllegalArgumentException("Tipo de reporte no válido: " + tipoReporte);
+        }
+    }
+
+    private void validarMes(YearMonth mes) {
+        if (mes.isAfter(YearMonth.now().plusMonths(0))) {
+            throw new IllegalArgumentException("El mes no puede ser mayor a 12 meses en el futuro");
+        }
+        if (mes.isBefore(YearMonth.of(2000, 1))) {
+            throw new IllegalArgumentException("El mes no puede ser anterior al año 2000");
+        }
+    }
+
+    private void generarReporteEspecifico(List<ReporteFinancieroDTO> filas, YearMonth mes,
+                                          HttpServletResponse response, TipoReporte tipoReporte) throws IOException {
+        XSSFWorkbook workbook = new XSSFWorkbook();
+        Sheet sheet = workbook.createSheet(tipoReporte.getDescripcion());
+
+        // Crear estilos
+        CellStyle headerStyle = crearEstiloEncabezado(workbook);
+        CellStyle currencyStyle = crearEstiloMoneda(workbook);
+        CellStyle textStyle = crearEstiloTexto(workbook);
+
+        // Título del reporte
+        Row titleRow = sheet.createRow(0);
+        Cell titleCell = titleRow.createCell(0);
+        titleCell.setCellValue("REPORTE " + tipoReporte.getDescripcion().toUpperCase() + " - " +
+                mes.format(DateTimeFormatter.ofPattern("MMMM yyyy")).toUpperCase());
+        CellStyle titleStyle = crearEstiloTitulo(workbook);
+        titleCell.setCellStyle(titleStyle);
+        sheet.addMergedRegion(new CellRangeAddress(0, 0, 0, 3));
+
+        // Encabezados
+        Row headerRow = sheet.createRow(2);
+        String[] columnas = {"Clave Distribuidor", "Modelo", "No. Serie", getColumnaTitulo(tipoReporte)};
+
+        for (int i = 0; i < columnas.length; i++) {
+            Cell cell = headerRow.createCell(i);
+            cell.setCellValue(columnas[i]);
+
+            // Aplicar color específico según el tipo de reporte
+            if (i == 3) {
+                cell.setCellStyle(crearEstiloEncabezadoEspecial(workbook, getColorPorTipo(tipoReporte)));
+            } else {
+                cell.setCellStyle(headerStyle);
+            }
+        }
+
+        // Datos
+        int rowIdx = 3;
+        double total = 0;
+
+        for (ReporteFinancieroDTO dto : filas) {
+            Row row = sheet.createRow(rowIdx++);
+
+            row.createCell(0).setCellValue(dto.getClaveDistribuidor());
+            row.getCell(0).setCellStyle(textStyle);
+
+            row.createCell(1).setCellValue(dto.getModelo());
+            row.getCell(1).setCellStyle(textStyle);
+
+            row.createCell(2).setCellValue(dto.getNoSerie());
+            row.getCell(2).setCellStyle(textStyle);
+
+            Cell valorCell = row.createCell(3);
+            double valor = getValorPorTipo(dto, tipoReporte);
+            valorCell.setCellValue(valor);
+            valorCell.setCellStyle(currencyStyle);
+
+            total += valor;
+        }
+
+        // Fila de total
+        Row totalRow = sheet.createRow(rowIdx + 1);
+        Cell totalLabelCell = totalRow.createCell(2);
+        totalLabelCell.setCellValue("TOTAL:");
+        CellStyle totalLabelStyle = crearEstiloTexto(workbook);
+        Font boldFont = workbook.createFont();
+        boldFont.setBold(true);
+        totalLabelStyle.setFont(boldFont);
+        totalLabelCell.setCellStyle(totalLabelStyle);
+
+        Cell totalValueCell = totalRow.createCell(3);
+        totalValueCell.setCellValue(total);
+        CellStyle totalStyle = crearEstiloMoneda(workbook);
+        totalStyle.setFont(boldFont);
+        totalStyle.setFillForegroundColor(getColorPorTipo(tipoReporte));
+        totalStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+        totalValueCell.setCellStyle(totalStyle);
+
+        // Ajustar columnas
+        for (int i = 0; i < 4; i++) {
+            sheet.autoSizeColumn(i);
+        }
+
+        // Congelar panel
+        sheet.createFreezePane(0, 3);
+
+        // Escribir y cerrar
+        try {
+            workbook.write(response.getOutputStream());
+        } finally {
+            workbook.close();
+        }
+    }
+
+    private String getColumnaTitulo(TipoReporte tipo) {
+        switch (tipo) {
+            case CUOTA_ASOCIACION:
+                return "Cuota Asociación";
+            case CUOTA_SEGURO:
+                return "Cuota Seguro (3.24%)";
+            case SEGURO:
+                return "Seguro (1.34%)";
+            case IMPORTE_TRASLADO:
+                return "Importe Traslado";
+            case FONDO_ESTRELLA:
+                return "Fondo Estrella";
+            default:
+                return "";
+        }
+    }
+
+    private double getValorPorTipo(ReporteFinancieroDTO dto, TipoReporte tipo) {
+        switch (tipo) {
+            case CUOTA_ASOCIACION:
+                return dto.getCuotaAsociacion() != null ? dto.getCuotaAsociacion() : 0;
+            case CUOTA_SEGURO:
+                return dto.getCuotaSeguro() != null ? dto.getCuotaSeguro() : 0;
+            case SEGURO:
+                return dto.getSeguro() != null ? dto.getSeguro() : 0;
+            case IMPORTE_TRASLADO:
+                return dto.getImporteTraslado() != null ? dto.getImporteTraslado() : 0;
+            case FONDO_ESTRELLA:
+                return dto.getFondoEstrella() != null ? dto.getFondoEstrella() : 0;
+            default:
+                return 0;
+        }
+    }
+
+    private short getColorPorTipo(TipoReporte tipo) {
+        switch (tipo) {
+            case CUOTA_ASOCIACION:
+                return IndexedColors.YELLOW.getIndex();
+            case CUOTA_SEGURO:
+                return IndexedColors.LIGHT_BLUE.getIndex();
+            case SEGURO:
+                return IndexedColors.LIGHT_BLUE.getIndex();
+            case IMPORTE_TRASLADO:
+                return IndexedColors.BRIGHT_GREEN.getIndex();
+            case FONDO_ESTRELLA:
+                return IndexedColors.GOLD.getIndex();
+            default:
+                return IndexedColors.GREY_25_PERCENT.getIndex();
+        }
+    }
+
+    private void generarReporteCompleto(List<ReporteFinancieroDTO> filas, YearMonth mes,
+                                        HttpServletResponse response) throws IOException {
         XSSFWorkbook workbook = new XSSFWorkbook();
         Sheet sheet = workbook.createSheet("Reporte Financiero");
 
@@ -201,10 +406,34 @@ public class ReporteFinancieroController {
             cell13.setCellStyle(currencyStyle);
         }
 
-        // Ahora agregamos los datos del desglose en las filas adecuadas
+        // Agregar el desglose lateral (código existente)
+        agregarDesgloseLateral(sheet, workbook);
+
+        // Ajustar el ancho de las columnas automáticamente
+        for (int i = 0; i <= 20; i++) {
+            sheet.autoSizeColumn(i);
+        }
+
+        // Congelar el panel para mantener visible la fila de encabezado
+        sheet.createFreezePane(0, 3);
+
+        // Agregar filtros en las columnas principales
+        sheet.setAutoFilter(new CellRangeAddress(2, 2, 0, 13));
+
+        try {
+            workbook.write(response.getOutputStream());
+        } finally {
+            workbook.close();
+        }
+    }
+
+    private void agregarDesgloseLateral(Sheet sheet, Workbook workbook) {
+        CellStyle textStyle = crearEstiloTexto(workbook);
+        CellStyle currencyStyle = crearEstiloMoneda(workbook);
+        CellStyle numberStyle = crearEstiloNumero(workbook);
+
         // AMDA - Primera fila de desglose (fila 3)
         Row amdaRow = getOrCreateRow(sheet, 3);
-
         Cell amdaName = amdaRow.createCell(14);
         amdaName.setCellValue("AMDA");
         amdaName.setCellStyle(textStyle);
@@ -227,7 +456,6 @@ public class ReporteFinancieroController {
 
         // ASOCIACION - Segunda fila de desglose (fila 4)
         Row asociacionRow = getOrCreateRow(sheet, 4);
-
         Cell asociacionName = asociacionRow.createCell(14);
         asociacionName.setCellValue("ASOCIACION");
         asociacionName.setCellStyle(textStyle);
@@ -246,7 +474,6 @@ public class ReporteFinancieroController {
 
         // CONVENCION - Tercera fila de desglose (fila 5)
         Row convencionRow = getOrCreateRow(sheet, 5);
-
         Cell convencionName = convencionRow.createCell(14);
         convencionName.setCellValue("CONVENCION");
         convencionName.setCellStyle(textStyle);
@@ -269,14 +496,12 @@ public class ReporteFinancieroController {
 
         // Valor adicional - Cuarta fila (fila 6)
         Row additionalRow = getOrCreateRow(sheet, 6);
-
         Cell additionalValue = additionalRow.createCell(15);
         additionalValue.setCellValue(2803.00);
         additionalValue.setCellStyle(currencyStyle);
 
-        // CAPACITACION - Quinta fila (fila 7) - Saltamos una línea vacía
+        // CAPACITACION - Quinta fila (fila 8)
         Row capacitacionRow = getOrCreateRow(sheet, 8);
-
         Cell capacitacionName = capacitacionRow.createCell(14);
         capacitacionName.setCellValue("CAPACITACION");
         capacitacionName.setCellStyle(textStyle);
@@ -301,9 +526,8 @@ public class ReporteFinancieroController {
         capacitacionTraslado.setCellValue(22900.00);
         capacitacionTraslado.setCellStyle(currencyStyle);
 
-        // PUBLICIDAD - Sexta fila (fila 8)
+        // PUBLICIDAD - Sexta fila (fila 9)
         Row publicidadRow = getOrCreateRow(sheet, 9);
-
         Cell publicidadName = publicidadRow.createCell(14);
         publicidadName.setCellValue("PUBLICIDAD");
         publicidadName.setCellStyle(textStyle);
@@ -324,14 +548,13 @@ public class ReporteFinancieroController {
         publicidadTraslado.setCellValue(1.16);
         publicidadTraslado.setCellStyle(numberStyle);
 
-        // Total parcial - Séptima fila (fila 9)
+        // Total parcial - Séptima fila (fila 10)
         Row subTotalRow = getOrCreateRow(sheet, 10);
-
         Cell subTotalValue = subTotalRow.createCell(15);
         subTotalValue.setCellValue(15080.00);
         subTotalValue.setCellStyle(currencyStyle);
 
-        // Total final con todos los valores - Octava fila (fila 10)
+        // Total final con todos los valores - Octava fila (fila 11)
         Row totalRow = getOrCreateRow(sheet, 11);
 
         // Estilos para valores coloreados
@@ -370,32 +593,8 @@ public class ReporteFinancieroController {
         Cell estrellaTotal = totalRow.createCell(20);
         estrellaTotal.setCellValue(46162.58);
         estrellaTotal.setCellStyle(goldTotalStyle);
-
-        // Ajustar el ancho de las columnas automáticamente
-        for (int i = 0; i <= 20; i++) {
-            sheet.autoSizeColumn(i);
-        }
-
-        // Congelar el panel para mantener visible la fila de encabezado
-        sheet.createFreezePane(0, 3);
-
-        // Agregar filtros en las columnas principales
-        sheet.setAutoFilter(new CellRangeAddress(2, 2, 0, 13));
-        try {
-            workbook.write(response.getOutputStream());
-        } catch (IOException e) {
-            throw new RuntimeException("Error al generar el archivo Excel", e);
-        } finally {
-            try {
-                workbook.close();
-            } catch (IOException e) {
-                // Log el error pero no lo propagamos
-                e.printStackTrace();
-            }
-        }
-        workbook.write(response.getOutputStream());
-        workbook.close();
     }
+
     /**
      * Manejador de excepciones para errores de conversión de parámetros
      */
@@ -411,6 +610,8 @@ public class ReporteFinancieroController {
         if (ex.getName().equals("mes")) {
             errorResponse.put("message", "Formato de mes inválido. El formato esperado es YYYY-MM (ejemplo: 2025-05)");
             errorResponse.put("ejemplo", "2025-05");
+        } else if (ex.getName().equals("tipo")) {
+            errorResponse.put("message", "Tipo de reporte inválido. Los tipos válidos son: SEGUROS_COMPLETOS, CUOTA_ASOCIACION, CUOTA_SEGURO, SEGURO, IMPORTE_TRASLADO, FONDO_ESTRELLA");
         } else {
             errorResponse.put("message", "Parámetro inválido: " + ex.getName());
         }
@@ -464,6 +665,7 @@ public class ReporteFinancieroController {
 
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse);
     }
+
     // Método auxiliar para obtener una fila existente o crear una nueva si no existe
     private Row getOrCreateRow(Sheet sheet, int rowNum) {
         Row row = sheet.getRow(rowNum);

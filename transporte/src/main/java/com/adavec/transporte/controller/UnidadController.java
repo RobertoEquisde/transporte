@@ -4,10 +4,7 @@ import com.adavec.transporte.dto.*;
 import com.adavec.transporte.exception.BusinessValidationException;
 import com.adavec.transporte.exception.DuplicateEntityException;
 import com.adavec.transporte.exception.EntityNotFoundException;
-import com.adavec.transporte.model.Distribuidor;
-import com.adavec.transporte.model.Modelo;
-import com.adavec.transporte.model.Seguro;
-import com.adavec.transporte.model.Unidad;
+import com.adavec.transporte.model.*;
 import com.adavec.transporte.repository.SeguroRepository;
 import com.adavec.transporte.service.DistribuidorService;
 import com.adavec.transporte.service.ModeloService;
@@ -90,6 +87,7 @@ public class UnidadController {
             dto.setDistribuidor(distDTO);
         }
 
+
         Seguro seguro = seguroRepository.findByUnidadId(unidad.getId());
         SeguroResumenDTO seguroDTO = new SeguroResumenDTO();
         seguroDTO.setId(seguro != null ? seguro.getId() : null);
@@ -97,7 +95,24 @@ public class UnidadController {
         seguroDTO.setValorSeguro(seguro != null && seguro.getValorSeguro() != null ? seguro.getValorSeguro() : 0.0);
         seguroDTO.setSeguroDistribuidor(seguro != null && seguro.getSeguroDistribuidor() != null ? seguro.getSeguroDistribuidor() : 0.0);
         dto.setSeguro(seguroDTO);
+        CobroResumenDTO cobroDTO = new CobroResumenDTO();
+        Cobros cobro = null;
+        if (unidad.getCobros() != null && !unidad.getCobros().isEmpty()) {
+            // Opción 1: Tomar el más reciente
+            cobro = unidad.getCobros().stream()
+                    .max((c1, c2) -> c1.getFechaProceso() != null && c2.getFechaProceso() != null
+                            ? c1.getFechaProceso().compareTo(c2.getFechaProceso())
+                            : 0)
+                    .orElse(null);
 
+            // O Opción 2: Usar un repository method (recomendado)
+            // cobro = cobrosRepository.findByUnidadId(unidad.getId());
+        }
+        cobroDTO.setId(cobro != null ? cobro.getId() : null);
+        cobroDTO.setTarifaUnica(cobro != null ? cobro.getTarifaUnica() : 0.0);
+        cobroDTO.setCuotaAsociacion(cobro != null ? cobro.getCuotaAsociacion() : 0.0);
+        cobroDTO.setFondoEstrella(cobro != null ? cobro.getFondoEstrella() : 0.0);
+        dto.setCobro(cobroDTO);
         return dto;
     }
     /*@GetMapping
