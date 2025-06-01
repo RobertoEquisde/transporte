@@ -63,16 +63,37 @@ public class ReporteFinancieroController {
         // Obtener datos
         List<ReporteFinancieroDTO> todasLasFilas = reporteFinancieroService.obtenerDatosFinancierosPorMes(mes);
 
-        // Filtrar solo aquellos registros que tienen información en días y cuota asociación
-        List<ReporteFinancieroDTO> filas = todasLasFilas.stream()
-                .filter(dto -> dto.getDias() > 0 && dto.getCuotaAsociacion() != null && dto.getCuotaAsociacion() > 0)
-                .collect(Collectors.toList());
+        // LOG: Debug información
+        System.out.println("DEBUG: Total de filas encontradas: " + todasLasFilas.size());
 
-        // Verificar si hay datos
+        // Verificar si hay datos base
         if (todasLasFilas.isEmpty()) {
             response.setStatus(HttpServletResponse.SC_NO_CONTENT);
-            response.getWriter().write("No se encontraron datos para el mes " + mes.format(DateTimeFormatter.ofPattern("MMMM yyyy")));
+            response.setContentType("application/json");
+            response.getWriter().write("{\"message\": \"No se encontraron registros para el mes " +
+                    mes.format(DateTimeFormatter.ofPattern("MMMM yyyy")) + "\"}");
             return;
+        }
+
+        // Filtrar solo aquellos registros que tienen información en días y cuota asociación
+        List<ReporteFinancieroDTO> filas = todasLasFilas.stream()
+                .filter(dto -> {
+                    boolean tieneInformacion = dto.getDias() > 0 && dto.getCuotaAsociacion() != null && dto.getCuotaAsociacion() > 0;
+                    System.out.println("DEBUG: Registro - Dias: " + dto.getDias() +
+                            ", CuotaAsociacion: " + dto.getCuotaAsociacion() +
+                            ", Válido: " + tieneInformacion);
+                    return tieneInformacion;
+                })
+                .collect(Collectors.toList());
+
+        System.out.println("DEBUG: Filas válidas después del filtro: " + filas.size());
+
+        // VALIDACIÓN CORREGIDA: Verificar si hay datos válidos después del filtro
+        if (filas.isEmpty()) {
+            System.out.println("DEBUG: Entrando en caso 2 - Sin datos válidos");
+            response.setStatus(HttpServletResponse.SC_NO_CONTENT); // 204 No Content
+            System.out.println("DEBUG: Respuesta 204 enviada, finalizando método");
+            return; // CRÍTICO: Parar la ejecución aquí
         }
 
         // Configurar respuesta
@@ -637,7 +658,7 @@ public class ReporteFinancieroController {
     }
 
     /**
-     * Manejador de excepciones para errores de E/S
+     * Manejador de excepciones para errores de E/O
      */
     @ExceptionHandler(IOException.class)
     public ResponseEntity<Map<String, Object>> handleIOException(IOException ex) {

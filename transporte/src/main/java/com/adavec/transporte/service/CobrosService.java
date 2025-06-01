@@ -1,5 +1,6 @@
 package com.adavec.transporte.service;
 
+import com.adavec.transporte.dto.ActualizarCobroRequest;
 import com.adavec.transporte.dto.CobroDTO;
 import com.adavec.transporte.dto.CrearCobroRequest;
 import com.adavec.transporte.model.Cobros;
@@ -74,7 +75,28 @@ public class CobrosService {
         // 4. Guardar cambios
         return cobrosRepository.save(cobroExistente);
     }
+    public Cobros actualizarCobroPorUnidad(Integer unidadId, ActualizarCobroRequest request) {
+        // 1. Buscar cobros por ID de unidad
+        List<Cobros> cobros = cobrosRepository.findByUnidadId(unidadId);
 
+        // 2. Verificar que existan cobros para esa unidad
+        if (cobros.isEmpty()) {
+            throw new RuntimeException("No se encontró cobro para la unidad: " + unidadId);
+        }
+
+        // 3. Si hay múltiples cobros, tomar el más reciente
+        Cobros cobroAActualizar = cobros.stream()
+                .max((c1, c2) -> c1.getFechaTraslado().compareTo(c2.getFechaTraslado()))
+                .orElseThrow(() -> new RuntimeException("Error al obtener el cobro"));
+
+        // 4. Actualizar solo los campos necesarios
+        cobroAActualizar.setTarifaUnica(request.getTarifaUnica());
+        cobroAActualizar.setCuotaAsociacion(request.getCuotaAsociacion());
+        cobroAActualizar.setFondoEstrella(request.getFondoEstrella());
+
+        // 5. Guardar cambios
+        return cobrosRepository.save(cobroAActualizar);
+    }
     public void eliminarCobro(Integer id) {
         // Verificar existencia antes de eliminar
         if (!cobrosRepository.existsById(id)) {

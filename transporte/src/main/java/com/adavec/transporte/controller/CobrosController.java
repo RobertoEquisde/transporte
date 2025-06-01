@@ -1,5 +1,6 @@
 package com.adavec.transporte.controller;
 
+import com.adavec.transporte.dto.ActualizarCobroRequest;
 import com.adavec.transporte.dto.CobroDTO;
 import com.adavec.transporte.dto.CrearCobroRequest;
 import com.adavec.transporte.model.Cobros;
@@ -38,7 +39,14 @@ public class CobrosController {
         Cobros actualizado = cobrosService.actualizarCobro(id, request);
         return ResponseEntity.ok("Cobro actualizado para la unidad: " + actualizado.getUnidad().getNoSerie());
     }
-
+    // Nuevo método para actualizar por ID de unidad
+    @PutMapping("/unidad/{unidadId}")
+    public ResponseEntity<?> actualizarPorUnidad(
+            @PathVariable Integer unidadId,
+            @RequestBody ActualizarCobroRequest request) {
+        Cobros actualizado = cobrosService.actualizarCobroPorUnidad(unidadId, request);
+        return ResponseEntity.ok("Cobro actualizado para la unidad: " + actualizado.getUnidad().getNoSerie());
+    }
     // Método para eliminar un cobro
     @DeleteMapping("/{id}")
     public ResponseEntity<?> eliminar(@PathVariable Integer id) {
