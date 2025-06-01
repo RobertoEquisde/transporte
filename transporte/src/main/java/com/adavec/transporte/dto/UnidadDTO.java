@@ -16,5 +16,5 @@ public class UnidadDTO {
     private ModeloDTO modelo;
     private DistribuidoraInfoDTO distribuidor;
     private SeguroResumenDTO seguro;
-    private CobroResumenDTO cobro;
+ 
 }
