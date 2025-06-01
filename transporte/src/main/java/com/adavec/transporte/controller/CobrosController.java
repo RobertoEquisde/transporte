@@ -3,6 +3,7 @@ package com.adavec.transporte.controller;
 import com.adavec.transporte.dto.ActualizarCobroRequest;
 import com.adavec.transporte.dto.CobroDTO;
 import com.adavec.transporte.dto.CrearCobroRequest;
+import com.adavec.transporte.dto.HistorialCobroDTO;
 import com.adavec.transporte.model.Cobros;
 import com.adavec.transporte.service.CobrosService;
 import org.springframework.http.HttpStatus;
@@ -26,11 +27,22 @@ public class CobrosController {
         Cobros nuevo = cobrosService.registrarCobro(request);
         return ResponseEntity.status(HttpStatus.CREATED).body("Cobro registrado para la unidad: " + nuevo.getUnidad().getNoSerie());
     }
+    @GetMapping("/historial/{unidadId}")
+    public ResponseEntity<List<HistorialCobroDTO>> getHistorialCobros(@PathVariable Long unidadId) {
+        List<HistorialCobroDTO> historial = cobrosService.getHistorialCobros(unidadId);
 
-    @GetMapping("/unidad/{unidadId}")
-    public List<CobroDTO> listarPorUnidad(@PathVariable Integer unidadId) {
-        return cobrosService.obtenerPorUnidad(unidadId);
+        // Si no hay historial, devuelve 204 No Content
+        if (historial == null || historial.isEmpty()) {
+            return ResponseEntity.noContent().build();
+        }
+
+        // Si hay historial, devuelve 200 OK con los datos
+        return ResponseEntity.ok(historial);
     }
+//    @GetMapping("/unidad/{unidadId}")
+//    public List<CobroDTO> listarPorUnidad(@PathVariable Integer unidadId) {
+//        return cobrosService.obtenerPorUnidad(unidadId);
+//    }
     // Método para actualizar un cobro
     @PutMapping("/{id}")
     public ResponseEntity<?> actualizar(

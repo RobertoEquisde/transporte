@@ -3,6 +3,7 @@ package com.adavec.transporte.service;
 import com.adavec.transporte.dto.ActualizarCobroRequest;
 import com.adavec.transporte.dto.CobroDTO;
 import com.adavec.transporte.dto.CrearCobroRequest;
+import com.adavec.transporte.dto.HistorialCobroDTO;
 import com.adavec.transporte.model.Cobros;
 import com.adavec.transporte.model.Unidad;
 import com.adavec.transporte.repository.CobrosRepository;
@@ -11,9 +12,11 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 public class CobrosService {
+
 
     private final CobrosRepository cobrosRepository;
     private final UnidadRepository unidadRepository;
@@ -104,5 +107,15 @@ public class CobrosService {
         }
         cobrosRepository.deleteById(id);
     }
+    public List<HistorialCobroDTO> getHistorialCobros(Long unidadId) {
+        List<Object[]> results = cobrosRepository.getHistorialCobros(unidadId);
 
+        return results.stream()
+                .map(row -> new HistorialCobroDTO(
+                        row[0] != null ? row[0].toString() : "",
+                        row[1] != null ? ((Number) row[1]).doubleValue() : 0.0,
+                        row[2] != null ? row[2].toString() : ""
+                ))
+                .collect(Collectors.toList());
+    }
 }
