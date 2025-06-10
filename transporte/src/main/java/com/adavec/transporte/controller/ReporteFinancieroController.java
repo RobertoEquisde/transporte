@@ -363,6 +363,13 @@ public class ReporteFinancieroController {
         desgloseHeader4.setCellValue("Fondo Estrella");
         desgloseHeader4.setCellStyle(fondoEstrellaStyle);
 
+        // Variables para calcular totales
+        double totalCuotaAsociacion = 0;
+        double totalCuotaSeguro = 0;
+        double totalSeguro = 0;
+        double totalImporteTraslado = 0;
+        double totalFondoEstrella = 0;
+
         // Crear todas las filas de datos del reporte principal primero
         for (int i = 0; i < filas.size(); i++) {
             ReporteFinancieroDTO dto = filas.get(i);
@@ -406,26 +413,104 @@ public class ReporteFinancieroController {
             cell8.setCellValue(dto.getValorUnidad());
             cell8.setCellStyle(currencyStyle);
 
+            // Cuota Asociación
             Cell cell9 = row.createCell(9);
-            cell9.setCellValue(dto.getCuotaAsociacion());
+            double cuotaAsociacion = dto.getCuotaAsociacion() != null ? dto.getCuotaAsociacion() : 0;
+            cell9.setCellValue(cuotaAsociacion);
             cell9.setCellStyle(currencyStyle);
+            totalCuotaAsociacion += cuotaAsociacion;
 
+            // Cuota Seguro
             Cell cell10 = row.createCell(10);
-            cell10.setCellValue(dto.getCuotaSeguro());
+            double cuotaSeguro = dto.getCuotaSeguro() != null ? dto.getCuotaSeguro() : 0;
+            cell10.setCellValue(cuotaSeguro);
             cell10.setCellStyle(currencyStyle);
+            totalCuotaSeguro += cuotaSeguro;
 
+            // Seguro
             Cell cell11 = row.createCell(11);
-            cell11.setCellValue(dto.getSeguro());
+            double seguro = dto.getSeguro() != null ? dto.getSeguro() : 0;
+            cell11.setCellValue(seguro);
             cell11.setCellStyle(currencyStyle);
+            totalSeguro += seguro;
 
+            // Importe Traslado
             Cell cell12 = row.createCell(12);
-            cell12.setCellValue(dto.getImporteTraslado());
+            double importeTraslado = dto.getImporteTraslado() != null ? dto.getImporteTraslado() : 0;
+            cell12.setCellValue(importeTraslado);
             cell12.setCellStyle(currencyStyle);
+            totalImporteTraslado += importeTraslado;
 
+            // Fondo Estrella
             Cell cell13 = row.createCell(13);
-            cell13.setCellValue(dto.getFondoEstrella());
+            double fondoEstrella = dto.getFondoEstrella() != null ? dto.getFondoEstrella() : 0;
+            cell13.setCellValue(fondoEstrella);
             cell13.setCellStyle(currencyStyle);
+            totalFondoEstrella += fondoEstrella;
         }
+
+        // Agregar fila de totales
+        rowIdx += 2; // Dejar una fila en blanco
+        Row totalRow = sheet.createRow(rowIdx);
+
+        // Crear estilos para los totales con colores de fondo
+        CellStyle totalLabelStyle = crearEstiloTexto(workbook);
+        Font boldFont = workbook.createFont();
+        boldFont.setBold(true);
+        boldFont.setFontHeightInPoints((short) 12);
+        totalLabelStyle.setFont(boldFont);
+
+        // Etiqueta "TOTAL"
+        Cell totalLabel = totalRow.createCell(8);
+        totalLabel.setCellValue("TOTAL:");
+        totalLabel.setCellStyle(totalLabelStyle);
+
+        // Crear estilos para totales con colores de fondo
+        CellStyle totalCuotaAsocStyle = crearEstiloMoneda(workbook);
+        totalCuotaAsocStyle.setFont(boldFont);
+        totalCuotaAsocStyle.setFillForegroundColor(IndexedColors.YELLOW.getIndex());
+        totalCuotaAsocStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+
+        CellStyle totalCuotaSeguroStyleTotal = crearEstiloMoneda(workbook);
+        totalCuotaSeguroStyleTotal.setFont(boldFont);
+        totalCuotaSeguroStyleTotal.setFillForegroundColor(IndexedColors.LIGHT_BLUE.getIndex());
+        totalCuotaSeguroStyleTotal.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+
+        CellStyle totalSeguroStyleTotal = crearEstiloMoneda(workbook);
+        totalSeguroStyleTotal.setFont(boldFont);
+        totalSeguroStyleTotal.setFillForegroundColor(IndexedColors.LIGHT_BLUE.getIndex());
+        totalSeguroStyleTotal.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+
+        CellStyle totalImporteTrasladoStyleTotal = crearEstiloMoneda(workbook);
+        totalImporteTrasladoStyleTotal.setFont(boldFont);
+        totalImporteTrasladoStyleTotal.setFillForegroundColor(IndexedColors.BRIGHT_GREEN.getIndex());
+        totalImporteTrasladoStyleTotal.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+
+        CellStyle totalFondoEstrellaStyleTotal = crearEstiloMoneda(workbook);
+        totalFondoEstrellaStyleTotal.setFont(boldFont);
+        totalFondoEstrellaStyleTotal.setFillForegroundColor(IndexedColors.GOLD.getIndex());
+        totalFondoEstrellaStyleTotal.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+
+        // Totales de cada columna
+        Cell totalCuotaAsocCell = totalRow.createCell(9);
+        totalCuotaAsocCell.setCellValue(totalCuotaAsociacion);
+        totalCuotaAsocCell.setCellStyle(totalCuotaAsocStyle);
+
+        Cell totalCuotaSeguroCell = totalRow.createCell(10);
+        totalCuotaSeguroCell.setCellValue(totalCuotaSeguro);
+        totalCuotaSeguroCell.setCellStyle(totalCuotaSeguroStyleTotal);
+
+        Cell totalSeguroCell = totalRow.createCell(11);
+        totalSeguroCell.setCellValue(totalSeguro);
+        totalSeguroCell.setCellStyle(totalSeguroStyleTotal);
+
+        Cell totalImporteTrasladoCell = totalRow.createCell(12);
+        totalImporteTrasladoCell.setCellValue(totalImporteTraslado);
+        totalImporteTrasladoCell.setCellStyle(totalImporteTrasladoStyleTotal);
+
+        Cell totalFondoEstrellaCell = totalRow.createCell(13);
+        totalFondoEstrellaCell.setCellValue(totalFondoEstrella);
+        totalFondoEstrellaCell.setCellStyle(totalFondoEstrellaStyleTotal);
 
         // Agregar el desglose lateral (código existente)
         agregarDesgloseLateral(sheet, workbook);

@@ -39,10 +39,11 @@ public class CobrosController {
         // Si hay historial, devuelve 200 OK con los datos
         return ResponseEntity.ok(historial);
     }
-//    @GetMapping("/unidad/{unidadId}")
-//    public List<CobroDTO> listarPorUnidad(@PathVariable Integer unidadId) {
-//        return cobrosService.obtenerPorUnidad(unidadId);
-//    }
+
+    @GetMapping("/unidad/{unidadId}")
+    public List<CobroDTO> listarPorUnidad(@PathVariable Integer unidadId) {
+        return cobrosService.obtenerPorUnidad(unidadId);
+    }
     // Método para actualizar un cobro
     @PutMapping("/{id}")
     public ResponseEntity<?> actualizar(
