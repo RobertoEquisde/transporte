@@ -1,11 +1,12 @@
 package com.adavec.transporte.controller;
 
 import com.adavec.transporte.dto.CrearDistribuidorDTO;
+import com.adavec.transporte.dto.DatosImportacion;
+import com.adavec.transporte.dto.ResultadoDesglose;
 import com.adavec.transporte.model.*;
-import com.adavec.transporte.service.CobrosService;
-import com.adavec.transporte.service.DistribuidorService;
-import com.adavec.transporte.service.SeguroService;
-import com.adavec.transporte.service.UnidadService;
+import com.adavec.transporte.repository.CobroDetalleRepository;
+import com.adavec.transporte.repository.ConceptoCobroRepository;
+import com.adavec.transporte.service.*;
 import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -13,6 +14,7 @@ import org.springframework.retry.annotation.Backoff;
 import org.springframework.retry.annotation.EnableRetry;
 import org.springframework.retry.annotation.Retryable;
 import org.springframework.transaction.annotation.Isolation;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -20,6 +22,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -31,20 +34,38 @@ public class TxtImportController {
 
     private final UnidadService unidadService;
     private final SeguroService seguroService;
-    private final CobrosService cobrosService;
     private final DistribuidorService distribuidorService;
+    private final DesgloseCobroService desgloseCobroService;
+
+    private final CobroDetalleRepository cobroDetalleRepository;
+    private final ConceptoCobroRepository conceptoCobroRepository;
+
+    private final TarifaConceptoService  tarifaConceptoService;
 
     // Tamaño del lote para procesar
     private static final int BATCH_SIZE = 5;
     private static final int MIN_COLUMNS_REQUIRED = 13;
 
-    public TxtImportController(UnidadService unidadService, SeguroService seguroService,
-                               CobrosService cobrosService, DistribuidorService distribuidorService) {
+    // Constantes para detección automática
+    private static final double VALOR_DESGLOSE_COMPLETO = 17883.0;
+    private static final double VALOR_TARIFA_UNICA_IVA = 26564.0;
+
+    public TxtImportController(UnidadService unidadService,
+                               SeguroService seguroService,
+                               DistribuidorService distribuidorService,
+                               DesgloseCobroService desgloseCobroService,
+                               CobroDetalleRepository cobroDetalleRepository,
+                               ConceptoCobroRepository conceptoCobroRepository,
+                               TarifaConceptoService tarifaConceptoService) {  // ← AGREGAR ESTA LÍNEA
         this.unidadService = unidadService;
         this.seguroService = seguroService;
-        this.cobrosService = cobrosService;
         this.distribuidorService = distribuidorService;
+        this.desgloseCobroService = desgloseCobroService;
+        this.cobroDetalleRepository = cobroDetalleRepository;
+        this.conceptoCobroRepository = conceptoCobroRepository;
+        this.tarifaConceptoService = tarifaConceptoService;  // ← AGREGAR ESTA LÍNEA
     }
+
 
     // Enum para tipos de errores
     public enum TipoError {
@@ -56,7 +77,8 @@ public class TxtImportController {
         VALOR_NUMERICO_INVALIDO("VALOR_NUMERICO_INVALIDO"),
         DISTRIBUIDOR_INVALIDO("DISTRIBUIDOR_INVALIDO"),
         ERROR_BASE_DATOS("ERROR_BASE_DATOS"),
-        ERROR_PROCESAMIENTO("ERROR_PROCESAMIENTO");
+        ERROR_PROCESAMIENTO("ERROR_PROCESAMIENTO"),
+        ERROR_DESGLOSE("ERROR_DESGLOSE");
 
         private final String descripcion;
 
@@ -158,6 +180,10 @@ public class TxtImportController {
             AtomicInteger importados = new AtomicInteger(0);
             AtomicInteger distribuidoresCreados = new AtomicInteger(0);
             AtomicInteger lotesConErrores = new AtomicInteger(0);
+            AtomicInteger conceptosAplicados = new AtomicInteger(0);
+            AtomicInteger desgloseCompleto = new AtomicInteger(0);
+            AtomicInteger tarifaUnicaDetectada = new AtomicInteger(0);
+            AtomicInteger unidadesExentas = new AtomicInteger(0);
 
             List<ErrorDetallado> todosLosErrores = new ArrayList<>();
             Map<TipoError, Integer> contadorErrores = new HashMap<>();
@@ -174,10 +200,14 @@ public class TxtImportController {
                 List<String> lote = lotes.get(i);
                 try {
                     System.out.println("📦 Procesando lote " + (i+1) + " de " + lotes.size());
-                    Map<String, Object> resultadoLote = procesarLoteDeLineas(lote, lineaGlobal);
+                    Map<String, Object> resultadoLote = procesarLoteDeLineas(lote, lineaGlobal, archivo.getOriginalFilename());
 
                     importados.addAndGet((int) resultadoLote.get("importados"));
                     distribuidoresCreados.addAndGet((int) resultadoLote.get("distribuidoresCreados"));
+                    conceptosAplicados.addAndGet((int) resultadoLote.getOrDefault("conceptosAplicados", 0));
+                    desgloseCompleto.addAndGet((int) resultadoLote.getOrDefault("desgloseCompleto", 0));
+                    tarifaUnicaDetectada.addAndGet((int) resultadoLote.getOrDefault("tarifaUnicaDetectada", 0));
+                    unidadesExentas.addAndGet((int) resultadoLote.getOrDefault("unidadesExentas", 0));
 
                     if (resultadoLote.containsKey("errores")) {
                         @SuppressWarnings("unchecked")
@@ -202,9 +232,13 @@ public class TxtImportController {
                 contadorErrores.merge(error.getTipoError(), 1, Integer::sum);
             }
 
-            // Construir respuesta
+            // Construir respuesta con estadísticas mejoradas
             resultado.put("unidadesImportadas", importados.get());
             resultado.put("distribuidoresCreados", distribuidoresCreados.get());
+            resultado.put("conceptosAplicados", conceptosAplicados.get());
+            resultado.put("desgloseCompletoDetectado", desgloseCompleto.get());
+            resultado.put("tarifaUnicaIvaDetectada", tarifaUnicaDetectada.get());
+            resultado.put("unidadesExentas", unidadesExentas.get());
             resultado.put("lotesConErrores", lotesConErrores.get());
             resultado.put("totalLineasProcesadas", lineas.size());
             resultado.put("totalErrores", todosLosErrores.size());
@@ -233,7 +267,8 @@ public class TxtImportController {
             List<ErrorDetallado> erroresSistema = todosLosErrores.stream()
                     .filter(error -> error.getTipoError() == TipoError.ERROR_BASE_DATOS ||
                             error.getTipoError() == TipoError.ERROR_PROCESAMIENTO ||
-                            error.getTipoError() == TipoError.DISTRIBUIDOR_INVALIDO)
+                            error.getTipoError() == TipoError.DISTRIBUIDOR_INVALIDO ||
+                            error.getTipoError() == TipoError.ERROR_DESGLOSE)
                     .toList();
 
             // Manejo específico para duplicados (HTTP 409 - Conflict)
@@ -256,7 +291,6 @@ public class TxtImportController {
                 resultado.put("cantidadDuplicados", erroresDuplicados.size());
                 resultado.put("solucion", "Revise los números de serie (VIN) y elimine las unidades duplicadas del archivo");
 
-                // Incluir todos los errores para contexto completo
                 if (!todosLosErrores.isEmpty()) {
                     resultado.put("todosLosErrores", todosLosErrores.stream().map(ErrorDetallado::toMap).toList());
                 }
@@ -329,6 +363,15 @@ public class TxtImportController {
                 resultado.put("message", "Importación completada exitosamente");
             }
 
+            // Añadir resumen ejecutivo
+            Map<String, Object> resumenEjecutivo = new HashMap<>();
+            resumenEjecutivo.put("mensaje", "Resumen de detección automática");
+            resumenEjecutivo.put("desgloseCompleto17883", desgloseCompleto.get());
+            resumenEjecutivo.put("tarifaUnicaIva26564", tarifaUnicaDetectada.get());
+            resumenEjecutivo.put("cobrosNormales", importados.get() - desgloseCompleto.get() - tarifaUnicaDetectada.get() - unidadesExentas.get());
+            resumenEjecutivo.put("unidadesExentas", unidadesExentas.get());
+            resultado.put("resumenEjecutivo", resumenEjecutivo);
+
             return ResponseEntity.ok(resultado);
 
         } catch (Exception e) {
@@ -343,6 +386,465 @@ public class TxtImportController {
         }
     }
 
+    /**
+     * Procesa un lote de líneas con manejo de errores mejorado y desglose de conceptos
+     */
+    @Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class)
+    public Map<String, Object> procesarLoteDeLineas(List<String> lineas, int lineaInicial, String nombreArchivo) {
+        int importados = 0;
+        int distribuidoresCreados = 0;
+        int conceptosAplicados = 0;
+        int desgloseCompleto = 0;
+        int tarifaUnicaDetectada = 0;
+        int unidadesExentas = 0;
+        List<ErrorDetallado> errores = new ArrayList<>();
+
+        for (int i = 0; i < lineas.size(); i++) {
+            int numeroLinea = lineaInicial + i;
+            String linea = lineas.get(i);
+
+            try {
+                // Validar línea antes de procesar
+                ResultadoValidacion validacion = validarLinea(linea, numeroLinea);
+                if (!validacion.isEsValido()) {
+                    errores.addAll(validacion.getErrores());
+                    continue;
+                }
+
+                String[] col = linea.split("\\|");
+                String claveDistribuidora = col[0];
+                String factura = col[1];
+                String modeloNombre = col[2];
+                String noSerie = col[4].trim();
+
+                // Verificar duplicados
+                Optional<Unidad> existente = unidadService.obtenerPorNoSerie(noSerie);
+                if (existente.isPresent()) {
+                    errores.add(new ErrorDetallado(numeroLinea, TipoError.DUPLICADO,
+                            String.format("Unidad duplicada - VIN: %s ya existe en el sistema (Distribuidor: %s, Modelo: %s)",
+                                    noSerie, claveDistribuidora, modeloNombre),
+                            linea, "noSerie", noSerie));
+                    continue;
+                }
+
+                // Procesar datos de la línea
+                LocalDate fechaFondeo = parseFecha(col[5]);
+                LocalDate fechaInteres = parseFecha(col[6]);
+                Integer dias = parseInt(col[7]);
+                Double valorUnidad = parseDouble(col[8]);
+                Double cuotaAsociacion = parseDouble(col[9]);
+                Double valorSeguro = parseDouble(col[10]);
+                Double tarifaUnica = parseDouble(col[11]);
+
+                Double fondoEstrella = 0.0;
+                if (col.length > 12) {
+                    fondoEstrella = convertirADouble(col[12]);
+                }
+
+                // Detectar tarifa única con IVA en penúltima columna
+                if (col.length > 15) {
+                    Double valorPenultimaColumna = convertirADouble(col[col.length - 2]);
+                    if (Math.abs(valorPenultimaColumna - VALOR_TARIFA_UNICA_IVA) < 0.01) {
+                        tarifaUnica = valorPenultimaColumna;
+                        System.out.println("🔍 Detectada tarifa única con IVA: " + valorPenultimaColumna +
+                                " para VIN: " + noSerie);
+                    }
+                }
+
+                LocalDate fechaTraslado = fechaFondeo;
+                if (col.length > 15) {
+                    LocalDate fechaTemp = parseFecha(col[15]);
+                    if (fechaTemp != null) {
+                        fechaTraslado = fechaTemp;
+                    }
+                }
+
+                // Procesar modelo y distribuidor
+                Modelo modelo = buscarOCrearModelo(modeloNombre);
+                if (modelo == null) {
+                    errores.add(new ErrorDetallado(numeroLinea, TipoError.ERROR_BASE_DATOS,
+                            "No se pudo crear o encontrar el modelo: " + modeloNombre,
+                            linea, "modeloNombre", modeloNombre));
+                    continue;
+                }
+
+                boolean esNuevoDistribuidor = false;
+                Distribuidor distribuidor = buscarOCrearDistribuidor(claveDistribuidora);
+                if (distribuidor == null) {
+                    errores.add(new ErrorDetallado(numeroLinea, TipoError.DISTRIBUIDOR_INVALIDO,
+                            "No se pudo crear o encontrar el distribuidor: " + claveDistribuidora,
+                            linea, "claveDistribuidora", claveDistribuidora));
+                    continue;
+                }
+                if (distribuidor.getId() == null || distribuidor.getId() == 0) {
+                    esNuevoDistribuidor = true;
+                }
+
+                // Crear y guardar unidad
+                Unidad unidad = new Unidad();
+                unidad.setNoSerie(noSerie);
+                unidad.setModelo(modelo);
+                unidad.setDistribuidor(distribuidor);
+                unidad.setDebisFecha(fechaFondeo);
+                unidad.setValorUnidad(valorUnidad);
+
+                unidad = guardarUnidad(unidad);
+                importados++;
+
+                if (esNuevoDistribuidor) {
+                    distribuidoresCreados++;
+                    System.out.println("✅ Nuevo distribuidor creado: " + claveDistribuidora);
+                }
+
+                // *** PROCESAR COBROS USANDO TU SISTEMA DE CONCEPTOS ***
+                // *** PROCESAR COBROS CON MANEJO GRANULAR DE CONCEPTOS ***
+                try {
+                    DatosImportacion datosImportacion = new DatosImportacion();
+                    datosImportacion.setUnidad(unidad);
+                    datosImportacion.setTarifaUnica(tarifaUnica);
+                    datosImportacion.setCuotaAsociacion(cuotaAsociacion);
+                    datosImportacion.setFondoEstrella(fondoEstrella);
+                    datosImportacion.setValorUnidad(valorUnidad);
+                    datosImportacion.setFechaTraslado(fechaTraslado);
+                    datosImportacion.setFechaInteres(fechaInteres);
+                    datosImportacion.setFechaFondeo(fechaFondeo);
+                    datosImportacion.setArchivoOrigen(nombreArchivo);
+                    datosImportacion.setDias(dias);
+                    datosImportacion.setNumeroFactura(factura);
+                    datosImportacion.setClaveDistribuidora(claveDistribuidora);
+                    datosImportacion.setModeloNombre(modeloNombre);
+                    datosImportacion.setNoSerie(noSerie);
+
+                    // Intentar usar el servicio completo primero
+                    ResultadoDesglose resultadoDesglose = desgloseCobroService.desglosarCobros(datosImportacion);
+
+                    if (resultadoDesglose.isExitoso()) {
+                        // El servicio funcionó correctamente
+                        conceptosAplicados += resultadoDesglose.getDetalles().size();
+
+                        // Detectar tipo de desglose para estadísticas
+                        if (Math.abs(cuotaAsociacion - VALOR_DESGLOSE_COMPLETO) < 0.01) {
+                            desgloseCompleto++;
+                            System.out.println("🔍 Desglose completo 17,883 aplicado para VIN: " + noSerie);
+                        }
+
+                        if (Math.abs(tarifaUnica - VALOR_TARIFA_UNICA_IVA) < 0.01) {
+                            tarifaUnicaDetectada++;
+                            System.out.println("🔍 Tarifa única con IVA 26,564 detectada para VIN: " + noSerie);
+                        }
+
+                        // Log advertencias del servicio
+                        if (!resultadoDesglose.getAdvertencias().isEmpty()) {
+                            System.out.println("⚠️ Advertencias para VIN " + noSerie + ":");
+                            resultadoDesglose.getAdvertencias().forEach(adv ->
+                                    System.out.println("   - " + adv));
+                        }
+
+                        System.out.println("✅ Cobros procesados - VIN: " + noSerie +
+                                " - " + resultadoDesglose.getDetalles().size() + " conceptos" +
+                                " - Total: $" + String.format("%.2f", resultadoDesglose.getTotalDesglosado()));
+
+                    } else if (resultadoDesglose.isExento()) {
+                        // Unidad exenta pero aún aplicar seguros básicos
+                        unidadesExentas++;
+                        System.out.println("ℹ️ Unidad exenta de tarifa única - VIN: " + noSerie +
+                                " - " + resultadoDesglose.getMotivo());
+
+                        // Aplicar solo seguros básicos para unidades exentas
+                        int conceptosBasicos = aplicarConceptosBasicos(unidad, valorUnidad, fechaTraslado, nombreArchivo);
+                        conceptosAplicados += conceptosBasicos;
+
+                        if (conceptosBasicos > 0) {
+                            System.out.println("✅ Aplicados " + conceptosBasicos + " conceptos básicos para VIN exenta: " + noSerie);
+                        }
+
+                    } else {
+                        // Error en el servicio, intentar aplicación manual de conceptos
+                        System.err.println("⚠️ Error en servicio de desglose para VIN " + noSerie +
+                                ": " + resultadoDesglose.getError());
+                        System.out.println("🔄 Intentando aplicación manual de conceptos...");
+
+                        int conceptosAplicadosManual = aplicarConceptosManualmente(
+                                unidad, tarifaUnica, cuotaAsociacion, fondoEstrella, valorUnidad,
+                                fechaTraslado, nombreArchivo
+                        );
+
+                        if (conceptosAplicadosManual > 0) {
+                            conceptosAplicados += conceptosAplicadosManual;
+
+                            // Detectar tipo de desglose para estadísticas
+                            if (Math.abs(cuotaAsociacion - VALOR_DESGLOSE_COMPLETO) < 0.01) {
+                                desgloseCompleto++;
+                                System.out.println("🔍 Desglose completo 17,883 aplicado manualmente para VIN: " + noSerie);
+                            }
+
+                            if (Math.abs(tarifaUnica - VALOR_TARIFA_UNICA_IVA) < 0.01) {
+                                tarifaUnicaDetectada++;
+                                System.out.println("🔍 Tarifa única con IVA 26,564 aplicada manualmente para VIN: " + noSerie);
+                            }
+
+                            System.out.println("✅ Aplicados " + conceptosAplicadosManual +
+                                    " conceptos manualmente para VIN: " + noSerie);
+                        } else {
+                            errores.add(new ErrorDetallado(numeroLinea, TipoError.ERROR_DESGLOSE,
+                                    "No se pudieron aplicar conceptos: " + resultadoDesglose.getError(),
+                                    linea));
+                        }
+                    }
+
+                } catch (Exception e) {
+                    System.err.println("💥 Error inesperado en cobros para VIN " + noSerie + ": " + e.getMessage());
+
+                    // Como último recurso, aplicar conceptos básicos
+                    try {
+                        int conceptosBasicos = aplicarConceptosBasicos(unidad, valorUnidad, fechaTraslado, nombreArchivo);
+                        if (conceptosBasicos > 0) {
+                            conceptosAplicados += conceptosBasicos;
+                            System.out.println("🛡️ Aplicados " + conceptosBasicos + " conceptos básicos como respaldo para VIN: " + noSerie);
+                        }
+                    } catch (Exception ex) {
+                        errores.add(new ErrorDetallado(numeroLinea, TipoError.ERROR_DESGLOSE,
+                                "Error crítico procesando cobros: " + ex.getMessage(),
+                                linea));
+                        System.err.println("💥 Error crítico en conceptos básicos para VIN " + noSerie + ": " + ex.getMessage());
+                    }
+                }
+
+
+                // Guardar seguro (mantener)
+                Seguro seguro = crearSeguro(unidad, distribuidor, factura, valorSeguro,
+                        cuotaAsociacion, valorUnidad, fechaFondeo);
+                guardarSeguro(seguro);
+
+                System.out.println("✅ Unidad procesada exitosamente - VIN: " + noSerie);
+
+            } catch (Exception e) {
+                errores.add(new ErrorDetallado(numeroLinea, TipoError.ERROR_PROCESAMIENTO,
+                        "Error inesperado al procesar línea: " + e.getMessage(),
+                        linea));
+                System.err.println("💥 Error en línea " + numeroLinea + ": " + e.getMessage());
+                e.printStackTrace();
+            }
+        }
+
+        Map<String, Object> resultado = new HashMap<>();
+        resultado.put("importados", importados);
+        resultado.put("distribuidoresCreados", distribuidoresCreados);
+        resultado.put("conceptosAplicados", conceptosAplicados);
+        resultado.put("desgloseCompleto", desgloseCompleto);
+        resultado.put("tarifaUnicaDetectada", tarifaUnicaDetectada);
+        resultado.put("unidadesExentas", unidadesExentas);
+        resultado.put("errores", errores);
+
+        return resultado;
+    }
+
+    private int aplicarConceptosBasicos(Unidad unidad, Double valorUnidad, LocalDate fechaTraslado, String nombreArchivo) {
+        int conceptosAplicados = 0;
+
+        try {
+            System.out.println("🔧 Aplicando conceptos básicos para VIN: " + unidad.getNoSerie() +
+                    " - Valor: $" + String.format("%.2f", valorUnidad));
+
+            // 1. SEGURO BÁSICO - DINÁMICO DESDE BD
+            conceptosAplicados += aplicarConceptoSiExiste("Seguro Básico", "Seguro",
+                    unidad, valorUnidad, fechaTraslado, nombreArchivo);
+
+            // 2. ADMINISTRACIÓN - DINÁMICO DESDE BD
+            conceptosAplicados += aplicarConceptoSiExiste("Gastos Administrativos", "Administración",
+                    unidad, valorUnidad, fechaTraslado, nombreArchivo);
+
+            // 3. MANEJO - DINÁMICO DESDE BD (OPCIONAL)
+            conceptosAplicados += aplicarConceptoSiExiste("Manejo de Unidad", "Manejo",
+                    unidad, valorUnidad, fechaTraslado, nombreArchivo);
+
+            System.out.println("✅ Total conceptos básicos aplicados: " + conceptosAplicados);
+
+        } catch (Exception e) {
+            System.err.println("💥 Error aplicando conceptos básicos dinámicos: " + e.getMessage());
+            e.printStackTrace();
+        }
+
+        return conceptosAplicados;
+    }
+// 3. MÉTODO HELPER PARA APLICAR CONCEPTOS CON FALLBACKS:
+    /**
+     * Intenta aplicar un concepto buscando por nombre principal y alternativo
+     */
+    private int aplicarConceptoSiExiste(String nombrePrincipal, String nombreAlternativo,
+                                        Unidad unidad, Double valorUnidad, LocalDate fechaTraslado, String nombreArchivo) {
+        try {
+            // Intentar con nombre principal
+            ConceptoCobro concepto = conceptoCobroRepository.findByNombre(nombrePrincipal).orElse(null);
+
+            // Si no existe, intentar con nombre alternativo
+            if (concepto == null) {
+                concepto = conceptoCobroRepository.findByNombre(nombreAlternativo).orElse(null);
+            }
+
+            if (concepto != null) {
+                return aplicarConceptoConTarifa(concepto, unidad, valorUnidad, fechaTraslado, nombreArchivo);
+            } else {
+                System.out.println("⚠️ No se encontró concepto: " + nombrePrincipal + " ni " + nombreAlternativo);
+                return 0;
+            }
+
+        } catch (Exception e) {
+            System.err.println("💥 Error aplicando concepto " + nombrePrincipal + ": " + e.getMessage());
+            return 0;
+        }
+    }
+// 4. MÉTODO PARA APLICAR CONCEPTO CON TARIFA DE BD:
+    /**
+     * Aplica un concepto consultando su tarifa en BD
+     */
+    private int aplicarConceptoConTarifa(ConceptoCobro concepto, Unidad unidad, Double valorUnidad,
+                                         LocalDate fechaTraslado, String nombreArchivo) {
+        try {
+            // Calcular monto usando el servicio dinámico
+            Double monto = tarifaConceptoService.calcularMonto(concepto.getId(), valorUnidad, fechaTraslado);
+
+            if (monto != null && monto > 0) {
+                // Aplicar el concepto
+                aplicarConcepto(unidad, concepto, monto, fechaTraslado, nombreArchivo,
+                        "Aplicado desde tarifa_concepto");
+
+                System.out.println("✅ " + concepto.getNombre() + " aplicado: $" + String.format("%.2f", monto));
+                return 1;
+
+            } else {
+                // Intentar fallback si es seguro básico
+                if (concepto.getNombre().toLowerCase().contains("seguro")) {
+                    Double montoFallback = valorUnidad * 0.03; // 3% por defecto
+                    aplicarConcepto(unidad, concepto, montoFallback, fechaTraslado, nombreArchivo,
+                            "Fallback 3% - Sin tarifa en BD");
+
+                    System.out.println("⚠️ " + concepto.getNombre() + " aplicado con fallback: $" +
+                            String.format("%.2f", montoFallback));
+                    return 1;
+                }
+
+                System.out.println("❌ No se pudo calcular " + concepto.getNombre() + " - Sin tarifa configurada");
+                return 0;
+            }
+
+        } catch (Exception e) {
+            System.err.println("💥 Error aplicando concepto " + concepto.getNombre() + ": " + e.getMessage());
+            return 0;
+        }
+    }
+
+// 5. MÉTODO DE VALIDACIÓN AL INICIO DE LA IMPORTACIÓN:
+    /**
+     * Valida que las tarifas estén configuradas antes de importar
+     */
+    private void validarConfiguracionTarifas() {
+        System.out.println("🔧 VALIDANDO CONFIGURACIÓN DE TARIFAS...");
+
+        String[] conceptosEsenciales = {"Seguro Básico", "Seguro"};
+        boolean configuracionOK = true;
+
+        for (String nombreConcepto : conceptosEsenciales) {
+            if (!tarifaConceptoService.tieneTarifaConfiguradaPorNombre(nombreConcepto, LocalDate.now())) {
+                System.err.println("⚠️ ADVERTENCIA: No hay tarifa configurada para " + nombreConcepto);
+                configuracionOK = false;
+            } else {
+                System.out.println("✅ " + nombreConcepto + " tiene tarifa configurada");
+            }
+        }
+
+        if (!configuracionOK) {
+            System.err.println("💡 SOLUCIÓN: Ejecutar el SQL de configuración de tarifas");
+            System.err.println("💡 O usar el endpoint /diagnostico-tarifas para más detalles");
+        } else {
+            System.out.println("🎉 Configuración de tarifas OK - Listo para importar");
+        }
+    }
+    /**
+     * Aplica conceptos manualmente cuando el servicio automático falla
+     */
+    private int aplicarConceptosManualmente(Unidad unidad, Double tarifaUnica, Double cuotaAsociacion,
+                                            Double fondoEstrella, Double valorUnidad, LocalDate fechaTraslado,
+                                            String nombreArchivo) {
+        int conceptosAplicados = 0;
+
+        try {
+            // 1. Aplicar tarifa única si existe
+            if (tarifaUnica != null && tarifaUnica > 0) {
+                ConceptoCobro conceptoTarifa = conceptoCobroRepository.findByNombre("Tarifa Única")
+                        .orElse(conceptoCobroRepository.findByNombre("Tarifas")
+                                .orElse(null));
+
+                if (conceptoTarifa != null) {
+                    aplicarConcepto(unidad, conceptoTarifa, tarifaUnica, fechaTraslado, nombreArchivo,
+                            "Tarifa única manual - $" + tarifaUnica);
+                    conceptosAplicados++;
+                    System.out.println("✅ Tarifa única aplicada manualmente: $" + String.format("%.2f", tarifaUnica));
+                }
+            }
+
+            // 2. Aplicar cuota de asociación si existe
+            if (cuotaAsociacion != null && cuotaAsociacion > 0) {
+                ConceptoCobro conceptoCuota = conceptoCobroRepository.findByNombre("Cuota de Asociación")
+                        .orElse(conceptoCobroRepository.findByNombre("Asociación")
+                                .orElse(null));
+
+                if (conceptoCuota != null) {
+                    aplicarConcepto(unidad, conceptoCuota, cuotaAsociacion, fechaTraslado, nombreArchivo,
+                            "Cuota asociación manual - $" + cuotaAsociacion);
+                    conceptosAplicados++;
+                    System.out.println("✅ Cuota asociación aplicada manualmente: $" + String.format("%.2f", cuotaAsociacion));
+                }
+            }
+
+            // 3. Aplicar fondo estrella si existe
+            if (fondoEstrella != null && fondoEstrella > 0) {
+                ConceptoCobro conceptoFondo = conceptoCobroRepository.findByNombre("Fondo Estrella")
+                        .orElse(conceptoCobroRepository.findByNombre("Fondo")
+                                .orElse(null));
+
+                if (conceptoFondo != null) {
+                    aplicarConcepto(unidad, conceptoFondo, fondoEstrella, fechaTraslado, nombreArchivo,
+                            "Fondo estrella manual - $" + fondoEstrella);
+                    conceptosAplicados++;
+                    System.out.println("✅ Fondo estrella aplicado manualmente: $" + String.format("%.2f", fondoEstrella));
+                }
+            }
+
+            // 4. Siempre aplicar conceptos básicos como respaldo
+            int conceptosBasicos = aplicarConceptosBasicos(unidad, valorUnidad, fechaTraslado, nombreArchivo);
+            conceptosAplicados += conceptosBasicos;
+
+        } catch (Exception e) {
+            System.err.println("Error en aplicación manual de conceptos: " + e.getMessage());
+        }
+
+        return conceptosAplicados;
+    }
+
+    /**
+     * Aplica un concepto específico a una unidad
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    private void aplicarConcepto(Unidad unidad, ConceptoCobro concepto, Double monto,
+                                 LocalDate fecha, String archivoOrigen, String observaciones) {
+        try {
+            CobroDetalle detalle = new CobroDetalle();
+            detalle.setUnidad(unidad);
+            detalle.setConcepto(concepto);
+            detalle.setMontoAplicado(monto);  // ← Cambiado de setMonto a setMontoAplicado
+
+            detalle.setArchivoOrigen(archivoOrigen);
+
+
+            cobroDetalleRepository.save(detalle);
+
+        } catch (Exception e) {
+            System.err.println("Error guardando concepto " + concepto.getNombre() +
+                    " para unidad " + unidad.getNoSerie() + ": " + e.getMessage());
+            throw e;
+        }
+    }
     /**
      * Valida una línea del archivo
      */
@@ -400,8 +902,8 @@ public class TxtImportController {
         }
 
         // Validar fechas
-        LocalDate fechaFondeo = validarFecha(col[5], numeroLinea, "fechaFondeo", linea, errores);
-        LocalDate fechaInteres = validarFecha(col[6], numeroLinea, "fechaInteres", linea, errores);
+        validarFecha(col[5], numeroLinea, "fechaFondeo", linea, errores);
+        validarFecha(col[6], numeroLinea, "fechaInteres", linea, errores);
 
         // Validar valores numéricos
         validarDouble(col[8], numeroLinea, "valorUnidad", linea, errores, true);
@@ -499,131 +1001,7 @@ public class TxtImportController {
         return lotes;
     }
 
-    /**
-     * Procesa un lote de líneas con manejo de errores mejorado
-     */
-    @Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class)
-    public Map<String, Object> procesarLoteDeLineas(List<String> lineas, int lineaInicial) {
-        int importados = 0;
-        int distribuidoresCreados = 0;
-        List<ErrorDetallado> errores = new ArrayList<>();
-
-        for (int i = 0; i < lineas.size(); i++) {
-            int numeroLinea = lineaInicial + i;
-            String linea = lineas.get(i);
-
-            try {
-                // Validar línea antes de procesar
-                ResultadoValidacion validacion = validarLinea(linea, numeroLinea);
-                if (!validacion.isEsValido()) {
-                    errores.addAll(validacion.getErrores());
-                    continue;
-                }
-
-                String[] col = linea.split("\\|");
-                String claveDistribuidora = col[0];
-                String factura = col[1];
-                String modeloNombre = col[2];
-                String noSerie = col[4].trim();
-
-                // Verificar duplicados
-                Optional<Unidad> existente = unidadService.obtenerPorNoSerie(noSerie);
-                if (existente.isPresent()) {
-                    errores.add(new ErrorDetallado(numeroLinea, TipoError.DUPLICADO,
-                            String.format("Unidad duplicada - VIN: %s ya existe en el sistema (Distribuidor: %s, Modelo: %s)",
-                                    noSerie, claveDistribuidora, modeloNombre),
-                            linea, "noSerie", noSerie));
-                    continue;
-                }
-
-                // Continuar con el procesamiento si no hay errores
-                LocalDate fechaFondeo = parseFecha(col[5]);
-                LocalDate fechaInteres = parseFecha(col[6]);
-                Integer dias = parseInt(col[7]);
-                Double valorUnidad = parseDouble(col[8]);
-                Double cuotaAsociacion = parseDouble(col[9]);
-                Double valorSeguro = parseDouble(col[10]);
-                Double tarifaUnica = parseDouble(col[11]);
-
-                Double fondoEstrella = 0.0;
-                if (col.length > 12) {
-                    fondoEstrella = convertirADouble(col[12]);
-                }
-
-                LocalDate fechaTraslado = fechaFondeo;
-                if (col.length > 15) {
-                    LocalDate fechaTemp = parseFecha(col[15]);
-                    if (fechaTemp != null) {
-                        fechaTraslado = fechaTemp;
-                    }
-                }
-
-                // Procesar modelo y distribuidor
-                Modelo modelo = buscarOCrearModelo(modeloNombre);
-                if (modelo == null) {
-                    errores.add(new ErrorDetallado(numeroLinea, TipoError.ERROR_BASE_DATOS,
-                            "No se pudo crear o encontrar el modelo: " + modeloNombre,
-                            linea, "modeloNombre", modeloNombre));
-                    continue;
-                }
-
-                boolean esNuevoDistribuidor = false;
-                Distribuidor distribuidor = buscarOCrearDistribuidor(claveDistribuidora);
-                if (distribuidor == null) {
-                    errores.add(new ErrorDetallado(numeroLinea, TipoError.DISTRIBUIDOR_INVALIDO,
-                            "No se pudo crear o encontrar el distribuidor: " + claveDistribuidora,
-                            linea, "claveDistribuidora", claveDistribuidora));
-                    continue;
-                }
-                if (distribuidor.getId() == null || distribuidor.getId() == 0) {
-                    esNuevoDistribuidor = true;
-                }
-
-                // Crear y guardar unidad
-                Unidad unidad = new Unidad();
-                unidad.setNoSerie(noSerie);
-                unidad.setModelo(modelo);
-                unidad.setDistribuidor(distribuidor);
-                unidad.setDebisFecha(fechaFondeo);
-                unidad.setValorUnidad(valorUnidad);
-
-                unidad = guardarUnidad(unidad);
-                importados++;
-
-                if (esNuevoDistribuidor) {
-                    distribuidoresCreados++;
-                    System.out.println("✅ Nuevo distribuidor creado: " + claveDistribuidora);
-                }
-
-                // Guardar seguro y cobros
-                Seguro seguro = crearSeguro(unidad, distribuidor, factura, valorSeguro,
-                        cuotaAsociacion, valorUnidad, fechaFondeo);
-                guardarSeguro(seguro);
-
-                Cobros cobro = crearCobros(unidad, cuotaAsociacion, fechaTraslado,
-                        fechaInteres, dias, tarifaUnica, fondoEstrella);
-                guardarCobros(cobro);
-
-                System.out.println("✅ Unidad procesada exitosamente - VIN: " + noSerie);
-
-            } catch (Exception e) {
-                errores.add(new ErrorDetallado(numeroLinea, TipoError.ERROR_PROCESAMIENTO,
-                        "Error inesperado al procesar línea: " + e.getMessage(),
-                        linea));
-                System.err.println("💥 Error en línea " + numeroLinea + ": " + e.getMessage());
-                e.printStackTrace();
-            }
-        }
-
-        Map<String, Object> resultado = new HashMap<>();
-        resultado.put("importados", importados);
-        resultado.put("distribuidoresCreados", distribuidoresCreados);
-        resultado.put("errores", errores);
-
-        return resultado;
-    }
-
-    // Los métodos restantes (buscarOCrearModelo, buscarOCrearDistribuidor, etc.) permanecen igual
+    // *** MÉTODOS NECESARIOS ***
     @Retryable(
             value = {PessimisticLockingFailureException.class},
             maxAttempts = 3,
@@ -702,32 +1080,7 @@ public class TxtImportController {
         seguroService.guardar(seguro);
     }
 
-    public Cobros crearCobros(Unidad unidad, Double cuotaAsociacion, LocalDate fechaTraslado,
-                              LocalDate fechaInteres, Integer dias, Double tarifaUnica, Double fondoEstrella) {
-        Cobros cobro = new Cobros();
-        cobro.setUnidad(unidad);
-        cobro.setCuotaAsociacion(cuotaAsociacion);
-        cobro.setFondoEstrella(fondoEstrella);
-        cobro.setFechaTraslado(fechaTraslado);
-        cobro.setFechaProceso(LocalDate.now());
-        cobro.setFechaInteres(fechaInteres);
-        cobro.setDias(dias);
-        cobro.setTarifaUnica(tarifaUnica);
-        cobro.setFondoEstrella(fondoEstrella);
-        return cobro;
-    }
-
-    @Retryable(
-            value = {PessimisticLockingFailureException.class},
-            maxAttempts = 3,
-            backoff = @Backoff(delay = 500, multiplier = 2)
-    )
-    @Transactional(isolation = Isolation.READ_COMMITTED)
-    public void guardarCobros(Cobros cobro) {
-        cobrosService.guardar(cobro);
-    }
-
-    // Métodos de utilidad que permanecen igual
+    // *** MÉTODOS DE UTILIDAD ***
     private Double convertirADouble(String raw) {
         if (raw == null || raw.trim().isEmpty() ||
                 raw.contains("SIN CVE") || raw.contains("N/A")) {

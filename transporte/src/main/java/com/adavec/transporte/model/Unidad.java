@@ -1,7 +1,10 @@
 package com.adavec.transporte.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
+import lombok.ToString;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -9,6 +12,8 @@ import java.util.List;
 @Entity
 @Table(name = "unidad")
 @Data
+@ToString(exclude = {"distribuidor", "seguros", "cobros"}) // ✅ Excluir relaciones
+@EqualsAndHashCode(exclude = {"distribuidor", "seguros", "cobros"})
 public class Unidad {
 
     @Id
@@ -45,8 +50,10 @@ public class Unidad {
     private Double valorUnidad;
 
     @OneToMany(mappedBy = "unidad", cascade = CascadeType.ALL, orphanRemoval = true)
+
     private List<Seguro> seguros;
     @OneToMany(mappedBy = "unidad", cascade = CascadeType.ALL, orphanRemoval = true)
+
     private List<Cobros> cobros;
 
 

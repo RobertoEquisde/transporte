@@ -1,13 +1,18 @@
 package com.adavec.transporte.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
+import lombok.ToString;
 
 import java.util.List;
 
 @Entity
 @Table(name = "distribuidor")
 @Data
+@ToString(exclude = {"unidades"}) // ✅ Excluir la colección
+@EqualsAndHashCode(exclude = {"unidades"})
 public class Distribuidor {
 
     @Id
@@ -35,6 +40,7 @@ public class Distribuidor {
     @Column(name = "Sucursal")
     private String sucursal;
     @OneToMany(mappedBy = "distribuidor", cascade = CascadeType.ALL, orphanRemoval = true)
+
     private List<Unidad> unidades;
 
 }

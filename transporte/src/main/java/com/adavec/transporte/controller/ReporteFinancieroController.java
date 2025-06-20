@@ -1,7 +1,12 @@
 package com.adavec.transporte.controller;
 
 import com.adavec.transporte.dto.ReporteFinancieroDTO;
+import com.adavec.transporte.model.ConceptoCobro;
+import com.adavec.transporte.repository.ConceptoCobroRepository;
 import com.adavec.transporte.service.ReporteFinancieroService;
+import com.adavec.transporte.dto.ReporteFinancieroDTO;
+import com.adavec.transporte.service.ReporteFinancieroService;
+import com.adavec.transporte.repository.ConceptoCobroRepository;
 import jakarta.servlet.http.HttpServletResponse;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.ss.util.CellRangeAddress;
@@ -12,22 +17,24 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collectors;
 import java.io.IOException;
 import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
-import java.util.List;
 
 @RestController
 @RequestMapping("/api/reportes")
 public class ReporteFinancieroController {
 
     private final ReporteFinancieroService reporteFinancieroService;
+    // ← AGREGAR ESTA LÍNEA - INYECTAR EL REPOSITORY
+    private final ConceptoCobroRepository conceptoCobroRepository;
 
-    public ReporteFinancieroController(ReporteFinancieroService reporteFinancieroService) {
+    public ReporteFinancieroController(ReporteFinancieroService reporteFinancieroService,
+                                       ConceptoCobroRepository conceptoCobroRepository) {
         this.reporteFinancieroService = reporteFinancieroService;
+        this.conceptoCobroRepository = conceptoCobroRepository;  // ← AGREGAR ESTA LÍNEA
     }
 
     // Enum para los tipos de reporte
@@ -284,6 +291,8 @@ public class ReporteFinancieroController {
                                         HttpServletResponse response) throws IOException {
         XSSFWorkbook workbook = new XSSFWorkbook();
         Sheet sheet = workbook.createSheet("Reporte Financiero");
+        // Tasa de IVA (ej. 16%)
+        final double tasaIVA = 0.16;
 
         // Crear estilos base
         CellStyle headerStyle = crearEstiloEncabezado(workbook);
@@ -298,32 +307,42 @@ public class ReporteFinancieroController {
         CellStyle seguroStyle = crearEstiloEncabezadoEspecial(workbook, IndexedColors.LIGHT_BLUE.getIndex());
         CellStyle importeTrasladoStyle = crearEstiloEncabezadoEspecial(workbook, IndexedColors.BRIGHT_GREEN.getIndex());
         CellStyle fondoEstrellaStyle = crearEstiloEncabezadoEspecial(workbook, IndexedColors.GOLD.getIndex());
+        CellStyle desgloseStyle = crearEstiloEncabezadoEspecial(workbook, IndexedColors.PALE_BLUE.getIndex());
 
         // Título del reporte
         Row titleRow = sheet.createRow(0);
         Cell titleCell = titleRow.createCell(0);
-        titleCell.setCellValue("REPORTE FINANCIERO - " + mes.format(DateTimeFormatter.ofPattern("MMMM yyyy")).toUpperCase());
+        titleCell.setCellValue("REPORTE FINANCIERO CON DESGLOSE - " + mes.format(DateTimeFormatter.ofPattern("MMMM yyyy")).toUpperCase());
         CellStyle titleStyle = crearEstiloTitulo(workbook);
         titleCell.setCellStyle(titleStyle);
-        sheet.addMergedRegion(new CellRangeAddress(0, 0, 0, 20));
+        sheet.addMergedRegion(new CellRangeAddress(0, 0, 0, 24)); // Aumentamos el rango para más columnas
 
         // Fila de encabezados
         int rowIdx = 2;
         String[] columnas = {
+                // INFORMACIÓN BÁSICA (0-8)
                 "Fecha Proceso", "Clave Distribuidor", "Número Factura", "Modelo", "No. Serie",
-                "Fecha Factura", "Fecha Interés", "Días", "Importe Factura", "Cuota Asociación",
-                "Cuota Seguro (3.24%)", "Seguro (1.34%)", "Importe Traslado", "Fondo Estrella"
+                "Fecha Factura", "Fecha Interés", "Días", "Importe Factura",
+
+                // TOTALES PRINCIPALES (9-13)
+                "Cuota Asociación", "Cuota Seguro (3.24%)", "Seguro (1.34%)", "Importe Traslado", "Fondo Estrella",
+
+                // SEPARADOR (14)
+                "",
+
+                // DESGLOSE DE CUOTA ASOCIACIÓN (15-19)
+                "ASOCIACIÓN", "CONVENCIÓN", "AMDA", "PUBLICIDAD", "CAPACITACIÓN"
         };
 
         Row encabezado = sheet.createRow(rowIdx);
         encabezado.setHeightInPoints(30); // Altura del encabezado
 
-        // Agregar encabezados del reporte principal
+        // Agregar encabezados
         for (int i = 0; i < columnas.length; i++) {
             Cell cell = encabezado.createCell(i);
             cell.setCellValue(columnas[i]);
 
-            // Aplicar estilos específicos a las columnas de interés
+            // Aplicar estilos específicos
             if (i == 9) { // Cuota Asociación
                 cell.setCellStyle(cuotaAsocStyle);
             } else if (i == 10) { // Cuota Seguro
@@ -334,34 +353,14 @@ public class ReporteFinancieroController {
                 cell.setCellStyle(importeTrasladoStyle);
             } else if (i == 13) { // Fondo Estrella
                 cell.setCellStyle(fondoEstrellaStyle);
+            } else if (i >= 15 && i <= 19) { // Desglose
+                cell.setCellStyle(desgloseStyle);
+            } else if (i == 14) { // Separador
+                cell.setCellStyle(textStyle);
             } else {
                 cell.setCellStyle(headerStyle);
             }
         }
-
-        // Agregar columna de separación
-        Cell separatorCell = encabezado.createCell(14);
-        separatorCell.setCellValue("");
-        separatorCell.setCellStyle(textStyle);
-
-        // Agregar encabezados del desglose al lado (como en la imagen)
-        Cell desgloseHeader1 = encabezado.createCell(15);
-        desgloseHeader1.setCellValue("CUOTA ASOCIACION");
-        desgloseHeader1.setCellStyle(cuotaAsocStyle);
-        sheet.addMergedRegion(new CellRangeAddress(2, 2, 15, 16));
-
-        Cell desgloseHeader2 = encabezado.createCell(17);
-        desgloseHeader2.setCellValue("CUOTA SEGURO");
-        desgloseHeader2.setCellStyle(cuotaSeguroStyle);
-        sheet.addMergedRegion(new CellRangeAddress(2, 2, 17, 18));
-
-        Cell desgloseHeader3 = encabezado.createCell(19);
-        desgloseHeader3.setCellValue("CUOTA TRASLADO");
-        desgloseHeader3.setCellStyle(importeTrasladoStyle);
-
-        Cell desgloseHeader4 = encabezado.createCell(20);
-        desgloseHeader4.setCellValue("Fondo Estrella");
-        desgloseHeader4.setCellStyle(fondoEstrellaStyle);
 
         // Variables para calcular totales
         double totalCuotaAsociacion = 0;
@@ -370,86 +369,138 @@ public class ReporteFinancieroController {
         double totalImporteTraslado = 0;
         double totalFondoEstrella = 0;
 
-        // Crear todas las filas de datos del reporte principal primero
+        // Totales del desglose
+        double totalAsociacion = 0;
+        double totalConvencion = 0;
+        double totalAmda = 0;
+        double totalPublicidad = 0;
+        double totalCapacitacion = 0;
+
+        // Crear todas las filas de datos
         for (int i = 0; i < filas.size(); i++) {
             ReporteFinancieroDTO dto = filas.get(i);
             rowIdx++;
             Row row = sheet.createRow(rowIdx);
 
-            // Aplicar estilos según el tipo de dato
-            Cell cell0 = row.createCell(0);
-            cell0.setCellValue(dto.getFechaProceso());
-            cell0.setCellStyle(dateStyle);
+            // ═══════════════════════════════════════
+            // INFORMACIÓN BÁSICA (Columnas 0-8)
+            // ═══════════════════════════════════════
+            row.createCell(0).setCellValue(dto.getFechaProceso());
+            row.getCell(0).setCellStyle(dateStyle);
 
-            Cell cell1 = row.createCell(1);
-            cell1.setCellValue(dto.getClaveDistribuidor());
-            cell1.setCellStyle(textStyle);
+            row.createCell(1).setCellValue(dto.getClaveDistribuidor());
+            row.getCell(1).setCellStyle(textStyle);
 
-            Cell cell2 = row.createCell(2);
-            cell2.setCellValue(dto.getNumeroFactura());
-            cell2.setCellStyle(textStyle);
+            row.createCell(2).setCellValue(dto.getNumeroFactura());
+            row.getCell(2).setCellStyle(textStyle);
 
-            Cell cell3 = row.createCell(3);
-            cell3.setCellValue(dto.getModelo());
-            cell3.setCellStyle(textStyle);
+            row.createCell(3).setCellValue(dto.getModelo());
+            row.getCell(3).setCellStyle(textStyle);
 
-            Cell cell4 = row.createCell(4);
-            cell4.setCellValue(dto.getNoSerie());
-            cell4.setCellStyle(textStyle);
+            row.createCell(4).setCellValue(dto.getNoSerie());
+            row.getCell(4).setCellStyle(textStyle);
 
-            Cell cell5 = row.createCell(5);
-            cell5.setCellValue(dto.getFechaFactura());
-            cell5.setCellStyle(dateStyle);
+            row.createCell(5).setCellValue(dto.getFechaTraslado());
+            row.getCell(5).setCellStyle(dateStyle);
 
-            Cell cell6 = row.createCell(6);
-            cell6.setCellValue(dto.getFechaInteres());
-            cell6.setCellStyle(dateStyle);
+            row.createCell(6).setCellValue(dto.getFechaInteres());
+            row.getCell(6).setCellStyle(dateStyle);
 
-            Cell cell7 = row.createCell(7);
-            cell7.setCellValue(dto.getDias());
-            cell7.setCellStyle(numberStyle);
+            row.createCell(7).setCellValue(dto.getDias() != null ? dto.getDias() : 0);
+            row.getCell(7).setCellStyle(numberStyle);
 
-            Cell cell8 = row.createCell(8);
-            cell8.setCellValue(dto.getValorUnidad());
-            cell8.setCellStyle(currencyStyle);
-
-            // Cuota Asociación
-            Cell cell9 = row.createCell(9);
+            row.createCell(8).setCellValue(dto.getValorUnidad() != null ? dto.getValorUnidad() : 0);
+            row.getCell(8).setCellStyle(currencyStyle);
+            List<Object[]> data = conceptoCobroRepository.findAplicaIvaData();
+            Map<Integer, Boolean> aplicaIvaMap = data.stream()
+                    .collect(Collectors.toMap(
+                            result -> (Integer) result[0],  // c.id
+                            result -> (Boolean) result[1]   // c.aplicaIva
+                    ));
+            // ═══════════════════════════════════════
+            // TOTALES PRINCIPALES (Columnas 9-13)
+            // ═══════════════════════════════════════
             double cuotaAsociacion = dto.getCuotaAsociacion() != null ? dto.getCuotaAsociacion() : 0;
-            cell9.setCellValue(cuotaAsociacion);
-            cell9.setCellStyle(currencyStyle);
+            double cuotaSeguro = dto.getCuotaSeguro() != null ? dto.getCuotaSeguro() : 0;
+            double seguro = dto.getSeguro() != null ? dto.getSeguro() : 0;
+            double importeTraslado = dto.getImporteTraslado() != null ? dto.getImporteTraslado() : 0;
+            double asociacion = dto.getAsociacion() != null ? dto.getAsociacion() : 0;
+            double fondoEstrella = dto.getFondoEstrella() != null ? dto.getFondoEstrella() : 0;
+            double convencion = dto.getConvencion() != null ? dto.getConvencion() : 0;
+            double amda = dto.getAmda() != null ? dto.getAmda() : 0;
+            double publicidad = dto.getPublicidad() != null ? dto.getPublicidad() : 0;
+            double capacitacion = dto.getCapacitacion() != null ? dto.getCapacitacion() : 0;
+            // Cuota Asociación (Total)
+
+            row.createCell(9).setCellValue(cuotaAsociacion);
+            row.getCell(9).setCellStyle(currencyStyle);
             totalCuotaAsociacion += cuotaAsociacion;
 
             // Cuota Seguro
-            Cell cell10 = row.createCell(10);
-            double cuotaSeguro = dto.getCuotaSeguro() != null ? dto.getCuotaSeguro() : 0;
-            cell10.setCellValue(cuotaSeguro);
-            cell10.setCellStyle(currencyStyle);
+
+            row.createCell(10).setCellValue(cuotaSeguro);
+            row.getCell(10).setCellStyle(currencyStyle);
             totalCuotaSeguro += cuotaSeguro;
 
             // Seguro
-            Cell cell11 = row.createCell(11);
-            double seguro = dto.getSeguro() != null ? dto.getSeguro() : 0;
-            cell11.setCellValue(seguro);
-            cell11.setCellStyle(currencyStyle);
+
+            row.createCell(11).setCellValue(seguro);
+            row.getCell(11).setCellStyle(currencyStyle);
             totalSeguro += seguro;
 
             // Importe Traslado
-            Cell cell12 = row.createCell(12);
-            double importeTraslado = dto.getImporteTraslado() != null ? dto.getImporteTraslado() : 0;
-            cell12.setCellValue(importeTraslado);
-            cell12.setCellStyle(currencyStyle);
+
+            row.createCell(12).setCellValue(importeTraslado);
+            row.getCell(12).setCellStyle(currencyStyle);
             totalImporteTraslado += importeTraslado;
 
             // Fondo Estrella
-            Cell cell13 = row.createCell(13);
-            double fondoEstrella = dto.getFondoEstrella() != null ? dto.getFondoEstrella() : 0;
-            cell13.setCellValue(fondoEstrella);
-            cell13.setCellStyle(currencyStyle);
+
+            row.createCell(13).setCellValue(fondoEstrella);
+            row.getCell(13).setCellStyle(currencyStyle);
             totalFondoEstrella += fondoEstrella;
+
+            // Separador (Columna 14)
+            row.createCell(14).setCellValue("");
+            row.getCell(14).setCellStyle(textStyle);
+
+            // ═══════════════════════════════════════
+            // DESGLOSE DE CUOTA ASOCIACIÓN (Columnas 15-19)
+            // ═══════════════════════════════════════
+
+            // ASOCIACIÓN
+
+            row.createCell(15).setCellValue(asociacion);
+            row.getCell(15).setCellStyle(currencyStyle);
+            totalAsociacion += asociacion;
+
+            // CONVENCIÓN
+
+            row.createCell(16).setCellValue(convencion);
+            row.getCell(16).setCellStyle(currencyStyle);
+            totalConvencion += convencion;
+
+            // AMDA
+
+            row.createCell(17).setCellValue(amda);
+            row.getCell(17).setCellStyle(currencyStyle);
+            totalAmda += amda;
+
+            // PUBLICIDAD
+            row.createCell(18).setCellValue(publicidad);
+            row.getCell(18).setCellStyle(currencyStyle);
+            totalPublicidad += publicidad;
+
+            // CAPACITACIÓN
+
+            row.createCell(19).setCellValue(capacitacion);
+            row.getCell(19).setCellStyle(currencyStyle);
+            totalCapacitacion += capacitacion;
         }
 
-        // Agregar fila de totales
+        // ═══════════════════════════════════════
+        // FILA DE TOTALES
+        // ═══════════════════════════════════════
         rowIdx += 2; // Dejar una fila en blanco
         Row totalRow = sheet.createRow(rowIdx);
 
@@ -465,58 +516,59 @@ public class ReporteFinancieroController {
         totalLabel.setCellValue("TOTAL:");
         totalLabel.setCellStyle(totalLabelStyle);
 
-        // Crear estilos para totales con colores de fondo
-        CellStyle totalCuotaAsocStyle = crearEstiloMoneda(workbook);
-        totalCuotaAsocStyle.setFont(boldFont);
-        totalCuotaAsocStyle.setFillForegroundColor(IndexedColors.YELLOW.getIndex());
-        totalCuotaAsocStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+        // Estilos para totales con colores
+        CellStyle[] totalStyles = {
+                crearEstiloMonedaColoreado(workbook, boldFont, IndexedColors.YELLOW.getIndex()),      // Cuota Asociación
+                crearEstiloMonedaColoreado(workbook, boldFont, IndexedColors.LIGHT_BLUE.getIndex()),  // Cuota Seguro
+                crearEstiloMonedaColoreado(workbook, boldFont, IndexedColors.LIGHT_BLUE.getIndex()),  // Seguro
+                crearEstiloMonedaColoreado(workbook, boldFont, IndexedColors.BRIGHT_GREEN.getIndex()),// Importe Traslado
+                crearEstiloMonedaColoreado(workbook, boldFont, IndexedColors.GOLD.getIndex()),        // Fondo Estrella
+                crearEstiloMonedaColoreado(workbook, boldFont, IndexedColors.PALE_BLUE.getIndex())    // Desglose
+        };
 
-        CellStyle totalCuotaSeguroStyleTotal = crearEstiloMoneda(workbook);
-        totalCuotaSeguroStyleTotal.setFont(boldFont);
-        totalCuotaSeguroStyleTotal.setFillForegroundColor(IndexedColors.LIGHT_BLUE.getIndex());
-        totalCuotaSeguroStyleTotal.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+        // Totales principales
+        double[] totales = {totalCuotaAsociacion, totalCuotaSeguro, totalSeguro, totalImporteTraslado, totalFondoEstrella};
+        for (int i = 0; i < totales.length; i++) {
+            Cell totalCell = totalRow.createCell(9 + i);
+            totalCell.setCellValue(totales[i]);
+            totalCell.setCellStyle(totalStyles[i]);
+        }
 
-        CellStyle totalSeguroStyleTotal = crearEstiloMoneda(workbook);
-        totalSeguroStyleTotal.setFont(boldFont);
-        totalSeguroStyleTotal.setFillForegroundColor(IndexedColors.LIGHT_BLUE.getIndex());
-        totalSeguroStyleTotal.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+        // Totales del desglose
+        double[] totalesDesglose = {totalAsociacion, totalConvencion, totalAmda, totalPublicidad, totalCapacitacion};
+        for (int i = 0; i < totalesDesglose.length; i++) {
+            Cell totalCell = totalRow.createCell(15 + i);
+            totalCell.setCellValue(totalesDesglose[i]);
+            totalCell.setCellStyle(totalStyles[5]); // Usar estilo de desglose
+        }
 
-        CellStyle totalImporteTrasladoStyleTotal = crearEstiloMoneda(workbook);
-        totalImporteTrasladoStyleTotal.setFont(boldFont);
-        totalImporteTrasladoStyleTotal.setFillForegroundColor(IndexedColors.BRIGHT_GREEN.getIndex());
-        totalImporteTrasladoStyleTotal.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+        // ═══════════════════════════════════════
+        // VALIDACIÓN DEL TOTAL 17883
+        // ═══════════════════════════════════════
+        double totalDesgloseCalculado = totalAsociacion + totalConvencion + totalAmda + totalPublicidad + totalCapacitacion;
 
-        CellStyle totalFondoEstrellaStyleTotal = crearEstiloMoneda(workbook);
-        totalFondoEstrellaStyleTotal.setFont(boldFont);
-        totalFondoEstrellaStyleTotal.setFillForegroundColor(IndexedColors.GOLD.getIndex());
-        totalFondoEstrellaStyleTotal.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+        // Agregar fila de verificación
+        Row verificacionRow = sheet.createRow(rowIdx + 2);
+        Cell verificacionLabel = verificacionRow.createCell(15);
+        verificacionLabel.setCellValue("VERIFICACIÓN TOTAL DESGLOSE:");
+        verificacionLabel.setCellStyle(totalLabelStyle);
 
-        // Totales de cada columna
-        Cell totalCuotaAsocCell = totalRow.createCell(9);
-        totalCuotaAsocCell.setCellValue(totalCuotaAsociacion);
-        totalCuotaAsocCell.setCellStyle(totalCuotaAsocStyle);
+        Cell verificacionValue = verificacionRow.createCell(16);
+        verificacionValue.setCellValue(totalDesgloseCalculado);
+        verificacionValue.setCellStyle(totalStyles[0]); // Amarillo
 
-        Cell totalCuotaSeguroCell = totalRow.createCell(10);
-        totalCuotaSeguroCell.setCellValue(totalCuotaSeguro);
-        totalCuotaSeguroCell.setCellStyle(totalCuotaSeguroStyleTotal);
+        Cell esperadoLabel = verificacionRow.createCell(17);
+        esperadoLabel.setCellValue("(Esperado: 17,883)");
+        esperadoLabel.setCellStyle(textStyle);
 
-        Cell totalSeguroCell = totalRow.createCell(11);
-        totalSeguroCell.setCellValue(totalSeguro);
-        totalSeguroCell.setCellStyle(totalSeguroStyleTotal);
-
-        Cell totalImporteTrasladoCell = totalRow.createCell(12);
-        totalImporteTrasladoCell.setCellValue(totalImporteTraslado);
-        totalImporteTrasladoCell.setCellStyle(totalImporteTrasladoStyleTotal);
-
-        Cell totalFondoEstrellaCell = totalRow.createCell(13);
-        totalFondoEstrellaCell.setCellValue(totalFondoEstrella);
-        totalFondoEstrellaCell.setCellStyle(totalFondoEstrellaStyleTotal);
-
-        // Agregar el desglose lateral (código existente)
-        agregarDesgloseLateral(sheet, workbook);
+        // Log para debugging
+        System.out.println("🔍 VERIFICACIÓN DE TOTALES:");
+        System.out.println("   Cuota Asociación Total: " + String.format("%.2f", totalCuotaAsociacion));
+        System.out.println("   Desglose Calculado: " + String.format("%.2f", totalDesgloseCalculado));
+        System.out.println("   Diferencia: " + String.format("%.2f", Math.abs(totalCuotaAsociacion - totalDesgloseCalculado)));
 
         // Ajustar el ancho de las columnas automáticamente
-        for (int i = 0; i <= 20; i++) {
+        for (int i = 0; i <= 19; i++) {
             sheet.autoSizeColumn(i);
         }
 
@@ -524,7 +576,7 @@ public class ReporteFinancieroController {
         sheet.createFreezePane(0, 3);
 
         // Agregar filtros en las columnas principales
-        sheet.setAutoFilter(new CellRangeAddress(2, 2, 0, 13));
+        sheet.setAutoFilter(new CellRangeAddress(2, 2, 0, 19));
 
         try {
             workbook.write(response.getOutputStream());
@@ -533,6 +585,14 @@ public class ReporteFinancieroController {
         }
     }
 
+    // MÉTODO HELPER PARA CREAR ESTILOS COLOREADOS
+    private CellStyle crearEstiloMonedaColoreado(Workbook workbook, Font font, short colorIndex) {
+        CellStyle style = crearEstiloMoneda(workbook);
+        style.setFont(font);
+        style.setFillForegroundColor(colorIndex);
+        style.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+        return style;
+    }
     private void agregarDesgloseLateral(Sheet sheet, Workbook workbook) {
         CellStyle textStyle = crearEstiloTexto(workbook);
         CellStyle currencyStyle = crearEstiloMoneda(workbook);
@@ -557,7 +617,7 @@ public class ReporteFinancieroController {
         amdaPercent.setCellStyle(textStyle);
 
         Cell amdaPercentValue = amdaRow.createCell(18);
-        amdaPercentValue.setCellValue(3.24);
+        amdaPercentValue.setCellValue(03.24);
         amdaPercentValue.setCellStyle(numberStyle);
 
         // ASOCIACION - Segunda fila de desglose (fila 4)
@@ -895,4 +955,305 @@ public class ReporteFinancieroController {
 
         return style;
     }
+    @GetMapping("/verificar-conceptos")
+    public ResponseEntity<?> verificarConceptos() {
+        try {
+            Map<String, Object> resultado = new HashMap<>();
+
+            // ═══════════════════════════════════════
+            // MAPEO DE IDs A NOMBRES PARA VERIFICACIÓN
+            // ═══════════════════════════════════════
+            Map<Integer, String> conceptosEsenciales = Map.of(
+                    1, "Tarifa única de traslado",
+                    2, "Seguro broker (1.34%)",
+                    3, "Seguro ADAVEC (3.24%)",
+                    4, "Cuota asociación ADAVEC",
+                    5, "Cuota convención ADAVEC",
+                    6, "Cuota AMDA",
+                    7, "Publicidad ASOBENS",
+                    8, "Capacitación ASOBENS",
+                    9, "Fondo estrella"
+            );
+
+            Map<String, Object> estadoConceptos = new HashMap<>();
+            boolean todosExisten = true;
+
+            // Verificar cada concepto por ID (más eficiente)
+            for (Map.Entry<Integer, String> entry : conceptosEsenciales.entrySet()) {
+                Integer id = entry.getKey();
+                String descripcion = entry.getValue();
+
+                boolean existe = conceptoCobroRepository.findById(id).isPresent();
+                estadoConceptos.put("ID_" + id + "_" + descripcion, existe ? "✅ EXISTE" : "❌ FALTA");
+
+                if (!existe) {
+                    todosExisten = false;
+                    System.err.println("❌ Falta concepto ID " + id + ": " + descripcion);
+                } else {
+                    System.out.println("✅ Concepto ID " + id + " encontrado: " + descripcion);
+                }
+            }
+
+            // Verificación adicional usando el método optimizado
+            Long conceptosEncontrados = conceptoCobroRepository.countConceptosEsenciales();
+            boolean verificacionOptimizada = conceptosEncontrados == 9;
+
+            resultado.put("conceptos", estadoConceptos);
+            resultado.put("configuracionCompleta", todosExisten);
+            resultado.put("verificacionOptimizada", verificacionOptimizada);
+            resultado.put("conceptosEncontrados", conceptosEncontrados);
+            resultado.put("conceptosEsperados", 9);
+
+            if (!todosExisten) {
+                // Obtener IDs faltantes
+                List<Integer> faltantes = conceptoCobroRepository.findConceptosFaltantes();
+                resultado.put("idsFaltantes", faltantes);
+                resultado.put("solucion", "Insertar los conceptos faltantes con IDs: " + faltantes);
+            }
+
+            // Información adicional para debugging
+            List<Object[]> resumenConceptos = conceptoCobroRepository.findResumenConceptos();
+            Map<String, Object> resumen = new HashMap<>();
+
+            for (Object[] concepto : resumenConceptos) {
+                Integer id = (Integer) concepto[0];
+                String nombre = (String) concepto[1];
+                String categoria = (String) concepto[2];
+
+                resumen.put("ID_" + id, Map.of(
+                        "nombre", nombre,
+                        "categoria", categoria
+                ));
+            }
+
+            resultado.put("resumenDetallado", resumen);
+
+            return ResponseEntity.ok(resultado);
+
+        } catch (Exception e) {
+            System.err.println("💥 Error verificando conceptos: " + e.getMessage());
+            e.printStackTrace();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    /**
+     * Test específico para el desglose usando IDs
+     */
+    @GetMapping("/test-desglose-ids")
+    public ResponseEntity<?> testDesgloseConIds(@RequestParam("mes") @DateTimeFormat(pattern = "yyyy-MM") YearMonth mes) {
+        try {
+            Map<String, Object> resultado = new HashMap<>();
+
+            System.out.println("🧪 PRUEBA DE DESGLOSE CON IDs PARA: " + mes);
+            System.out.println("═══════════════════════════════════════");
+
+            // Obtener datos del reporte
+            List<ReporteFinancieroDTO> datos = reporteFinancieroService.obtenerDatosFinancierosPorMes(mes);
+
+            if (datos.isEmpty()) {
+                resultado.put("message", "No hay datos para el mes " + mes);
+                return ResponseEntity.ok(resultado);
+            }
+
+            // Verificar que los conceptos del desglose existen
+            List<ConceptoCobro> conceptosDesglose = conceptoCobroRepository.findConceptosDesglose();
+            Map<String, Object> conceptosEncontrados = new HashMap<>();
+
+            for (ConceptoCobro concepto : conceptosDesglose) {
+                conceptosEncontrados.put("ID_" + concepto.getId(), concepto.getNombre());
+            }
+
+            // Estadísticas generales
+            resultado.put("totalUnidades", datos.size());
+            resultado.put("unidadesConCobros", datos.stream().filter(dto -> dto.getCuotaAsociacion() > 0).count());
+            resultado.put("conceptosDesgloseEncontrados", conceptosEncontrados);
+
+            // Verificar desglose de cuota asociación
+            Map<String, Double> totalesDesglose = new HashMap<>();
+            totalesDesglose.put("asociacion_ID4", datos.stream().mapToDouble(dto -> dto.getAsociacion() != null ? dto.getAsociacion() : 0).sum());
+            totalesDesglose.put("convencion_ID5", datos.stream().mapToDouble(dto -> dto.getConvencion() != null ? dto.getConvencion() : 0).sum());
+            totalesDesglose.put("amda_ID6", datos.stream().mapToDouble(dto -> dto.getAmda() != null ? dto.getAmda() : 0).sum());
+            totalesDesglose.put("publicidad_ID7", datos.stream().mapToDouble(dto -> dto.getPublicidad() != null ? dto.getPublicidad() : 0).sum());
+            totalesDesglose.put("capacitacion_ID8", datos.stream().mapToDouble(dto -> dto.getCapacitacion() != null ? dto.getCapacitacion() : 0).sum());
+
+            double totalDesglose = totalesDesglose.values().stream().mapToDouble(Double::doubleValue).sum();
+            double totalCuotaAsociacion = datos.stream().mapToDouble(dto -> dto.getCuotaAsociacion() != null ? dto.getCuotaAsociacion() : 0).sum();
+
+            resultado.put("desglosePorId", totalesDesglose);
+            resultado.put("totalDesglose", totalDesglose);
+            resultado.put("totalCuotaAsociacion", totalCuotaAsociacion);
+            resultado.put("diferencia", Math.abs(totalDesglose - totalCuotaAsociacion));
+            resultado.put("target17883Correcto", Math.abs(totalDesglose - 17883.0) < 0.01);
+
+            // Totales de conceptos principales (por ID)
+            Map<String, Double> conceptosPrincipales = new HashMap<>();
+            conceptosPrincipales.put("cuotaSeguro_ID3", datos.stream().mapToDouble(dto -> dto.getCuotaSeguro() != null ? dto.getCuotaSeguro() : 0).sum());
+            conceptosPrincipales.put("seguro_ID2", datos.stream().mapToDouble(dto -> dto.getSeguro() != null ? dto.getSeguro() : 0).sum());
+            conceptosPrincipales.put("importeTraslado_ID1", datos.stream().mapToDouble(dto -> dto.getImporteTraslado() != null ? dto.getImporteTraslado() : 0).sum());
+            conceptosPrincipales.put("fondoEstrella_ID9", datos.stream().mapToDouble(dto -> dto.getFondoEstrella() != null ? dto.getFondoEstrella() : 0).sum());
+
+            resultado.put("conceptosPrincipalesPorId", conceptosPrincipales);
+
+            // Log detallado
+            System.out.println("📊 RESULTADOS CON IDs:");
+            System.out.println("   Total Unidades: " + datos.size());
+            System.out.println("   Cuota Asociación Total: " + String.format("%.2f", totalCuotaAsociacion));
+            System.out.println("   Desglose Total: " + String.format("%.2f", totalDesglose));
+            System.out.println("   Target 17,883: " + (Math.abs(totalDesglose - 17883.0) < 0.01 ? "✅ CORRECTO" : "❌ INCORRECTO"));
+            System.out.println("   Conceptos desglose encontrados: " + conceptosDesglose.size() + "/5");
+            System.out.println("═══════════════════════════════════════");
+
+            return ResponseEntity.ok(resultado);
+
+        } catch (Exception e) {
+            System.err.println("💥 Error en prueba de desglose con IDs: " + e.getMessage());
+            e.printStackTrace();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", e.getMessage()));
+        }
+    }
+    /**
+     * Muestra el mapeo completo de IDs a columnas del Excel
+     */
+    @GetMapping("/mapeo-conceptos")
+    public ResponseEntity<?> mostrarMapeoConceptos() {
+        try {
+            Map<String, Object> resultado = new HashMap<>();
+
+            // ═══════════════════════════════════════
+            // MAPEO DE IDs A COLUMNAS EXCEL
+            // ═══════════════════════════════════════
+            Map<String, Object> mapeoColumnas = new LinkedHashMap<>();
+
+            // Conceptos principales
+            mapeoColumnas.put("Cuota Seguro (3.24%)", Map.of(
+                    "id", 3,
+                    "descripcion", "Seguro ADAVEC (3.24% del valor)",
+                    "tipo", "PORCENTAJE",
+                    "categoria", "SEGURO"
+            ));
+
+            mapeoColumnas.put("Seguro (1.34%)", Map.of(
+                    "id", 2,
+                    "descripcion", "Seguro broker (1.34% del valor)",
+                    "tipo", "PORCENTAJE",
+                    "categoria", "SEGURO"
+            ));
+
+            mapeoColumnas.put("Importe Traslado", Map.of(
+                    "id", 1,
+                    "descripcion", "Tarifa única de traslado",
+                    "tipo", "MONTO_FIJO",
+                    "categoria", "TRASLADO"
+            ));
+
+            mapeoColumnas.put("Fondo Estrella", Map.of(
+                    "id", 9,
+                    "descripcion", "Fondo estrella - Monto variable",
+                    "tipo", "MANUAL",
+                    "categoria", "FONDO"
+            ));
+
+            // ═══════════════════════════════════════
+            // DESGLOSE DE CUOTA ASOCIACIÓN (Target: 17,883)
+            // ═══════════════════════════════════════
+            Map<String, Object> desgloseAsociacion = new LinkedHashMap<>();
+
+            desgloseAsociacion.put("ASOCIACIÓN", Map.of(
+                    "id", 4,
+                    "descripcion", "Cuota de asociación ADAVEC",
+                    "tipo", "MONTO_FIJO"
+            ));
+
+            desgloseAsociacion.put("CONVENCIÓN", Map.of(
+                    "id", 5,
+                    "descripcion", "Cuota de convención ADAVEC",
+                    "tipo", "MONTO_FIJO"
+            ));
+
+            desgloseAsociacion.put("AMDA", Map.of(
+                    "id", 6,
+                    "descripcion", "Cuota AMDA",
+                    "tipo", "MONTO_FIJO"
+            ));
+
+            desgloseAsociacion.put("PUBLICIDAD", Map.of(
+                    "id", 7,
+                    "descripcion", "Publicidad ASOBENS",
+                    "tipo", "MONTO_FIJO"
+            ));
+
+            desgloseAsociacion.put("CAPACITACIÓN", Map.of(
+                    "id", 8,
+                    "descripcion", "Capacitación ASOBENS",
+                    "tipo", "MONTO_FIJO"
+            ));
+
+            // ═══════════════════════════════════════
+            // INFORMACIÓN DE LA BASE DE DATOS
+            // ═══════════════════════════════════════
+            List<Object[]> conceptosActuales = conceptoCobroRepository.findAllConceptosInfo();
+            Map<String, Object> conceptosEnBD = new LinkedHashMap<>();
+
+            for (Object[] concepto : conceptosActuales) {
+                Integer id = (Integer) concepto[0];
+                String nombre = (String) concepto[1];
+                String descripcion = (String) concepto[2];
+
+                conceptosEnBD.put("ID_" + id, Map.of(
+                        "nombre", nombre,
+                        "descripcion", descripcion != null ? descripcion : "Sin descripción"
+                ));
+            }
+
+            // ═══════════════════════════════════════
+            // VALIDACIÓN DEL MAPEO
+            // ═══════════════════════════════════════
+            List<Integer> idsEsperados = List.of(1, 2, 3, 4, 5, 6, 7, 8, 9);
+            List<Integer> idsFaltantes = new ArrayList<>();
+
+            for (Integer id : idsEsperados) {
+                if (!conceptoCobroRepository.findById(id).isPresent()) {
+                    idsFaltantes.add(id);
+                }
+            }
+
+            boolean mapeoCompleto = idsFaltantes.isEmpty();
+
+            // ═══════════════════════════════════════
+            // CONSTRUCCIÓN DE LA RESPUESTA
+            // ═══════════════════════════════════════
+            resultado.put("columnasPrincipales", mapeoColumnas);
+            resultado.put("desgloseAsociacion", desgloseAsociacion);
+            resultado.put("targetDesgloseTotal", 17883.0);
+            resultado.put("conceptosEnBaseDatos", conceptosEnBD);
+            resultado.put("mapeoCompleto", mapeoCompleto);
+            resultado.put("idsFaltantes", idsFaltantes);
+
+            if (!mapeoCompleto) {
+                resultado.put("advertencia", "Faltan conceptos en la base de datos");
+                resultado.put("solucion", "Insertar los conceptos con IDs: " + idsFaltantes);
+            }
+
+            // Información adicional
+            resultado.put("totalConceptosEsperados", 9);
+            resultado.put("totalConceptosEncontrados", conceptosActuales.size());
+            resultado.put("estructuraExcel", Map.of(
+                    "columnas0_8", "Información básica de la unidad",
+                    "columnas9_13", "Totales principales (Cuota Asociación, Cuota Seguro, Seguro, Importe Traslado, Fondo Estrella)",
+                    "columnas15_19", "Desglose de Cuota Asociación (ASOCIACIÓN + CONVENCIÓN + AMDA + PUBLICIDAD + CAPACITACIÓN = 17,883)"
+            ));
+
+            return ResponseEntity.ok(resultado);
+
+        } catch (Exception e) {
+            System.err.println("💥 Error mostrando mapeo: " + e.getMessage());
+            e.printStackTrace();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", e.getMessage()));
+        }
+    }
+
 }

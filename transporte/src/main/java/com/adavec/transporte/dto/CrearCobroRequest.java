@@ -2,6 +2,8 @@ package com.adavec.transporte.dto;
 
 import lombok.Data;
 
+import java.time.LocalDate;
+
 @Data
 public class CrearCobroRequest {
     private Integer unidadId;
@@ -9,5 +11,5 @@ public class CrearCobroRequest {
     private Double cuotaAsociacion;
     private Double fondoEstrella;
     private Integer dias;
-    private String fechaTraslado; // formato: yyyy-MM-dd
+    private LocalDate fechaTraslado; // formato: yyyy-MM-dd
 }

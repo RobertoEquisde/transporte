@@ -36,7 +36,7 @@ public class CobrosService {
         cobro.setCuotaAsociacion(request.getCuotaAsociacion());
         cobro.setFondoEstrella(request.getFondoEstrella());
         cobro.setDias(request.getDias());
-        cobro.setFechaTraslado(LocalDate.parse(request.getFechaTraslado()));
+        cobro.setFechaTraslado(request.getFechaTraslado());
 
         return cobrosRepository.save(cobro);
     }
@@ -73,7 +73,7 @@ public class CobrosService {
         cobroExistente.setCuotaAsociacion(request.getCuotaAsociacion());
         cobroExistente.setFondoEstrella(request.getFondoEstrella());
         cobroExistente.setDias(request.getDias());
-        cobroExistente.setFechaTraslado(LocalDate.parse(request.getFechaTraslado()));
+        cobroExistente.setFechaTraslado(request.getFechaTraslado());
 
         // 4. Guardar cambios
         return cobrosRepository.save(cobroExistente);
